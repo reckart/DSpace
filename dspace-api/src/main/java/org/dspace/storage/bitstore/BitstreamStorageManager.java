@@ -15,7 +15,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import org.apache.log4j.Logger;
@@ -26,9 +25,9 @@ import org.dspace.core.Utils;
 import org.dspace.storage.rdbms.DatabaseManager;
 import org.dspace.storage.rdbms.TableRow;
 
+import de.tudarmstadt.ukp.dariah.storage.client.StorageClient;
 import edu.sdsc.grid.io.FileFactory;
 import edu.sdsc.grid.io.GeneralFile;
-import edu.sdsc.grid.io.GeneralFileOutputStream;
 import edu.sdsc.grid.io.local.LocalFile;
 import edu.sdsc.grid.io.srb.SRBAccount;
 import edu.sdsc.grid.io.srb.SRBFile;
@@ -38,7 +37,7 @@ import edu.sdsc.grid.io.srb.SRBFileSystem;
  * <P>
  * Stores, retrieves and deletes bitstreams.
  * </P>
- * 
+ *
  * <P>
  * Presently, asset stores are specified in <code>dspace.cfg</code>. Since
  * Java does not offer a way of detecting free disk space, the asset store to
@@ -47,17 +46,17 @@ import edu.sdsc.grid.io.srb.SRBFileSystem;
  * available space in the asset stores, and DSpace (Tomcat) has to be restarted
  * when the asset store for new ('incoming') bitstreams is changed.
  * </P>
- * 
+ *
  * <P>
  * Mods by David Little, UCSD Libraries 12/21/04 to allow the registration of
  * files (bitstreams) into DSpace.
  * </P>
- * 
- * <p>Cleanup integration with checker package by Nate Sarr 2006-01. N.B. The 
- * dependency on the checker package isn't ideal - a Listener pattern would be 
+ *
+ * <p>Cleanup integration with checker package by Nate Sarr 2006-01. N.B. The
+ * dependency on the checker package isn't ideal - a Listener pattern would be
  * better but was considered overkill for the purposes of integrating the checker.
- * It would be worth re-considering a Listener pattern if another package needs to 
- * be notified of BitstreamStorageManager actions.</p> 
+ * It would be worth re-considering a Listener pattern if another package needs to
+ * be notified of BitstreamStorageManager actions.</p>
  *
  * @author Peter Breton, Robert Tansley, David Little, Nathan Sarr
  * @version $Revision$
@@ -67,6 +66,8 @@ public class BitstreamStorageManager
     /** log4j log */
     private static Logger log = Logger.getLogger(BitstreamStorageManager.class);
 
+    private static final String IDP_URL = "https://ldap-dariah.esc.rzg.mpg.de/idp/profile/SAML2/SOAP/ECP";
+    private static final String LOCAL_URL = "http://localhost:8080/StorageImplementation";
 	/**
 	 * The asset store locations. The information for each GeneralFile in the
 	 * array comes from dspace.cfg, so see the comments in that file.
@@ -116,7 +117,7 @@ public class BitstreamStorageManager
 		// 'assetstore.dir' is always store number 0
 		String sAssetstoreDir = ConfigurationManager
 				.getProperty("assetstore.dir");
- 
+
 		// see if conventional assetstore or srb
 		if (sAssetstoreDir != null) {
 			stores.add(sAssetstoreDir); // conventional (non-srb)
@@ -211,22 +212,22 @@ public class BitstreamStorageManager
 
     /**
      * Store a stream of bits.
-     * 
+     *
      * <p>
      * If this method returns successfully, the bits have been stored, and RDBMS
      * metadata entries are in place (the context still needs to be completed to
      * finalize the transaction).
      * </p>
-     * 
+     *
      * <p>
      * If this method returns successfully and the context is aborted, then the
      * bits will be stored in the asset store and the RDBMS metadata entries
      * will exist, but with the deleted flag set.
      * </p>
-     * 
+     *
      * If this method throws an exception, then any of the following may be
      * true:
-     * 
+     *
      * <ul>
      * <li>Neither bits nor RDBMS metadata entries have been stored.
      * <li>RDBMS metadata entries with the deleted flag set have been stored,
@@ -234,7 +235,7 @@ public class BitstreamStorageManager
      * <li>RDBMS metadata entries with the deleted flag set have been stored,
      * and some or all of the bits have also been stored.
      * </ul>
-     * 
+     *
      * @param context
      *            The current context
      * @param is
@@ -243,102 +244,108 @@ public class BitstreamStorageManager
      *                If a problem occurs while storing the bits
      * @exception SQLException
      *                If a problem occurs accessing the RDBMS
-     * 
+     *
      * @return The ID of the stored bitstream
      */
     public static int store(Context context, InputStream is)
             throws SQLException, IOException
     {
-        // Create internal ID
-        String id = Utils.generateKey();
+        //Dariah Test
+        StorageClient client = StorageClient.createShibbolethClientAnyCert(LOCAL_URL + "/", IDP_URL, "TestUser", "test123");
+        Long fileId= client.createFile(is, "application/octet-stream");
+        System.out.println("Stored file with id: " + fileId);
+        return fileId.intValue();
 
-        // Create a deleted bitstream row, using a separate DB connection
-        TableRow bitstream;
-        Context tempContext = null;
-
-        try
-        {
-            tempContext = new Context();
-
-            bitstream = DatabaseManager.row("Bitstream");
-            bitstream.setColumn("deleted", true);
-            bitstream.setColumn("internal_id", id);
-
-            /*
-             * Set the store number of the new bitstream If you want to use some
-             * other method of working out where to put a new bitstream, here's
-             * where it should go
-             */
-            bitstream.setColumn("store_number", incoming);
-
-            DatabaseManager.insert(tempContext, bitstream);
-
-            tempContext.complete();
-        }
-        catch (SQLException sqle)
-        {
-            if (tempContext != null)
-            {
-                tempContext.abort();
-            }
-
-            throw sqle;
-        }
-
-        // Where on the file system will this new bitstream go?
-		GeneralFile file = getFile(bitstream);
-
-        // Make the parent dirs if necessary
-		GeneralFile parent = file.getParentFile();
-
-        if (!parent.exists())
-        {
-            parent.mkdirs();
-        }
-
-        //Create the corresponding file and open it
-        file.createNewFile();
-
-		GeneralFileOutputStream fos = FileFactory.newFileOutputStream(file);
-
-		// Read through a digest input stream that will work out the MD5
-        DigestInputStream dis = null;
-
-        try
-        {
-            dis = new DigestInputStream(is, MessageDigest.getInstance("MD5"));
-        }
-        // Should never happen
-        catch (NoSuchAlgorithmException nsae)
-        {
-            log.warn("Caught NoSuchAlgorithmException", nsae);
-        }
-
-        Utils.bufferedCopy(dis, fos);
-        fos.close();
-        is.close();
-
-        bitstream.setColumn("size_bytes", file.length());
-
-        if (dis != null)
-        {
-            bitstream.setColumn("checksum", Utils.toHex(dis.getMessageDigest()
-                    .digest()));
-            bitstream.setColumn("checksum_algorithm", "MD5");
-        }
-        
-        bitstream.setColumn("deleted", false);
-        DatabaseManager.update(context, bitstream);
-
-        int bitstreamId = bitstream.getIntColumn("bitstream_id");
-
-        if (log.isDebugEnabled())
-        {
-            log.debug("Stored bitstream " + bitstreamId + " in file "
-                    + file.getAbsolutePath());
-        }
-
-        return bitstreamId;
+//        // Create internal ID
+//        String id = Utils.generateKey();
+//
+//        // Create a deleted bitstream row, using a separate DB connection
+//        TableRow bitstream;
+//        Context tempContext = null;
+//
+//        try
+//        {
+//            tempContext = new Context();
+//
+//            bitstream = DatabaseManager.row("Bitstream");
+//            bitstream.setColumn("deleted", true);
+//            bitstream.setColumn("internal_id", id);
+//
+//            /*
+//             * Set the store number of the new bitstream If you want to use some
+//             * other method of working out where to put a new bitstream, here's
+//             * where it should go
+//             */
+//            bitstream.setColumn("store_number", incoming);
+//
+//            DatabaseManager.insert(tempContext, bitstream);
+//
+//            tempContext.complete();
+//        }
+//        catch (SQLException sqle)
+//        {
+//            if (tempContext != null)
+//            {
+//                tempContext.abort();
+//            }
+//
+//            throw sqle;
+//        }
+//
+//        // Where on the file system will this new bitstream go?
+//		GeneralFile file = getFile(bitstream);
+//
+//        // Make the parent dirs if necessary
+//		GeneralFile parent = file.getParentFile();
+//
+//        if (!parent.exists())
+//        {
+//            parent.mkdirs();
+//        }
+//
+//        //Create the corresponding file and open it
+//        file.createNewFile();
+//
+//		GeneralFileOutputStream fos = FileFactory.newFileOutputStream(file);
+//
+//		// Read through a digest input stream that will work out the MD5
+//        DigestInputStream dis = null;
+//
+//        try
+//        {
+//            dis = new DigestInputStream(is, MessageDigest.getInstance("MD5"));
+//        }
+//        // Should never happen
+//        catch (NoSuchAlgorithmException nsae)
+//        {
+//            log.warn("Caught NoSuchAlgorithmException", nsae);
+//        }
+//
+//        Utils.bufferedCopy(dis, fos);
+//        fos.close();
+//        is.close();
+//
+//        bitstream.setColumn("size_bytes", file.length());
+//
+//        if (dis != null)
+//        {
+//            bitstream.setColumn("checksum", Utils.toHex(dis.getMessageDigest()
+//                    .digest()));
+//            bitstream.setColumn("checksum_algorithm", "MD5");
+//        }
+//
+//        bitstream.setColumn("deleted", false);
+//        DatabaseManager.update(context, bitstream);
+//
+//        int bitstreamId = bitstream.getIntColumn("bitstream_id");
+//
+//        if (log.isDebugEnabled())
+//        {
+//            log.debug("Stored bitstream " + bitstreamId + " in file "
+//                    + file.getAbsolutePath());
+//        }
+//
+//        return bitstreamId;
     }
 
 	/**
@@ -389,48 +396,48 @@ public class BitstreamStorageManager
 		//
 		// DSpace refers to checksum, writes it in METS, and uses it as an
 		// AIP filename (!), but never seems to validate with it. Furthermore,
-		// DSpace appears to hardcode the algorithm to MD5 in some places--see 
+		// DSpace appears to hardcode the algorithm to MD5 in some places--see
 		// METSExport.java.
 		//
-		// To remain compatible with DSpace we calculate an MD5 checksum on 
-		// LOCAL registered files. But for REMOTE (e.g. SRB) files we 
-		// calculate an MD5 on just the fileNAME. The reasoning is that in the 
+		// To remain compatible with DSpace we calculate an MD5 checksum on
+		// LOCAL registered files. But for REMOTE (e.g. SRB) files we
+		// calculate an MD5 on just the fileNAME. The reasoning is that in the
 		// case of a remote file, calculating an MD5 on the file itself will
-		// generate network traffic to read the file's bytes. In this case it 
-		// would be better have a proxy process calculate MD5 and store it as 
+		// generate network traffic to read the file's bytes. In this case it
+		// would be better have a proxy process calculate MD5 and store it as
 		// an SRB metadata attribute so it can be retrieved simply from SRB.
 		//
 		// TODO set this up as a proxy server process so no net activity
-		
+
 		// FIXME this is a first class HACK! for the reasons described above
-		if (file instanceof LocalFile) 
+		if (file instanceof LocalFile)
 		{
 
 			// get MD5 on the file for local file
 			DigestInputStream dis = null;
-			try 
+			try
 			{
-				dis = new DigestInputStream(FileFactory.newFileInputStream(file), 
+				dis = new DigestInputStream(FileFactory.newFileInputStream(file),
 						MessageDigest.getInstance("MD5"));
-			} 
-			catch (NoSuchAlgorithmException e) 
+			}
+			catch (NoSuchAlgorithmException e)
 			{
 				log.warn("Caught NoSuchAlgorithmException", e);
 				throw new IOException("Invalid checksum algorithm", e);
 			}
-			catch (IOException e) 
+			catch (IOException e)
 			{
-				log.error("File: " + file.getAbsolutePath() 
+				log.error("File: " + file.getAbsolutePath()
 						+ " to be registered cannot be opened - is it "
 						+ "really there?");
 				throw e;
 			}
 			final int BUFFER_SIZE = 1024 * 4;
 			final byte[] buffer = new byte[BUFFER_SIZE];
-			while (true) 
+			while (true)
 			{
 				final int count = dis.read(buffer, 0, BUFFER_SIZE);
-				if (count == -1) 
+				if (count == -1)
 				{
 					break;
 				}
@@ -438,12 +445,12 @@ public class BitstreamStorageManager
 			bitstream.setColumn("checksum", Utils.toHex(dis.getMessageDigest()
 					.digest()));
 			dis.close();
-		} 
+		}
 		else if (file instanceof SRBFile)
 		{
 			if (!file.exists())
 			{
-				log.error("File: " + file.getAbsolutePath() 
+				log.error("File: " + file.getAbsolutePath()
 						+ " is not in SRB MCAT");
 				throw new IOException("File is not in SRB MCAT");
 			}
@@ -452,16 +459,16 @@ public class BitstreamStorageManager
 			int iLastSlash = bitstreamPath.lastIndexOf('/');
 			String sFilename = bitstreamPath.substring(iLastSlash + 1);
 			MessageDigest md = null;
-			try 
+			try
 			{
 				md = MessageDigest.getInstance("MD5");
-			} 
-			catch (NoSuchAlgorithmException e) 
+			}
+			catch (NoSuchAlgorithmException e)
 			{
 				log.error("Caught NoSuchAlgorithmException", e);
 				throw new IOException("Invalid checksum algorithm", e);
 			}
-			bitstream.setColumn("checksum", 
+			bitstream.setColumn("checksum",
 					Utils.toHex(md.digest(sFilename.getBytes())));
 		}
 		else
@@ -476,7 +483,7 @@ public class BitstreamStorageManager
 		DatabaseManager.update(context, bitstream);
 
 		int bitstreamId = bitstream.getIntColumn("bitstream_id");
-		if (log.isDebugEnabled()) 
+		if (log.isDebugEnabled())
 		{
 			log.debug("Stored bitstream " + bitstreamId + " in file "
 					+ file.getAbsolutePath());
@@ -493,7 +500,7 @@ public class BitstreamStorageManager
 	 */
 	public static boolean isRegisteredBitstream(String internalId) {
 	    if (internalId.substring(0, REGISTERED_FLAG.length())
-	            .equals(REGISTERED_FLAG)) 
+	            .equals(REGISTERED_FLAG))
 	    {
 	        return true;
 	    }
@@ -503,7 +510,7 @@ public class BitstreamStorageManager
     /**
      * Retrieve the bits for the bitstream with ID. If the bitstream does not
      * exist, or is marked deleted, returns null.
-     * 
+     *
      * @param context
      *            The current context
      * @param id
@@ -512,7 +519,7 @@ public class BitstreamStorageManager
      *                If a problem occurs while retrieving the bits
      * @exception SQLException
      *                If a problem occurs accessing the RDBMS
-     * 
+     *
      * @return The stream of bits, or null
      */
     public static InputStream retrieve(Context context, int id)
@@ -531,12 +538,12 @@ public class BitstreamStorageManager
      * bits, but simply marks the bitstreams as deleted (the context still needs
      * to be completed to finalize the transaction).
      * </p>
-     * 
+     *
      * <p>
      * If the context is aborted, the bitstreams deletion status remains
      * unchanged.
      * </p>
-     * 
+     *
      * @param context
      *            The current context
      * @param id
@@ -559,9 +566,9 @@ public class BitstreamStorageManager
      * Clean up the bitstream storage area. This method deletes any bitstreams
      * which are more than 1 hour old and marked deleted. The deletions cannot
      * be undone.
-     * 
+     *
      * @param deleteDbRecords if true deletes the database records otherwise it
-     * 	           only deletes the files and directories in the assetstore  
+     * 	           only deletes the files and directories in the assetstore
      * @exception IOException
      *                If a problem occurs while cleaning up
      * @exception SQLException
@@ -582,9 +589,7 @@ public class BitstreamStorageManager
             List<TableRow> storage = DatabaseManager.queryTable(context, "Bitstream", myQuery)
                     .toList();
 
-            for (Iterator<TableRow> iterator = storage.iterator(); iterator.hasNext();)
-            {
-                TableRow row = iterator.next();
+            for (TableRow row : storage) {
                 int bid = row.getIntColumn("bitstream_id");
 
 				GeneralFile file = getFile(row);
@@ -729,7 +734,7 @@ public class BitstreamStorageManager
 
     /**
      * Return true if this file is too recent to be deleted, false otherwise.
-     * 
+     *
      * @param file
      *            The file to check
      * @return True if this file is too recent to be deleted
@@ -750,7 +755,7 @@ public class BitstreamStorageManager
 
     /**
      * Delete empty parent directories.
-     * 
+     *
      * @param file
      *            The file with parent directories to delete
      */
@@ -760,7 +765,7 @@ public class BitstreamStorageManager
         {
             return;
         }
- 
+
 		GeneralFile tmp = file;
 
         for (int i = 0; i < directoryLevels; i++)
@@ -783,13 +788,13 @@ public class BitstreamStorageManager
     /**
      * Return the file corresponding to a bitstream. It's safe to pass in
      * <code>null</code>.
-     * 
+     *
      * @param bitstream
      *            the database table row for the bitstream. Can be
      *            <code>null</code>
-     * 
+     *
      * @return The corresponding file in the file system, or <code>null</code>
-     * 
+     *
      * @exception IOException
      *                If a problem occurs while determining the file
      */
@@ -828,7 +833,7 @@ public class BitstreamStorageManager
 			sInternalId = sInternalId.substring(REGISTERED_FLAG.length());
 			sIntermediatePath = "";
 		} else {
-			
+
 			// Sanity Check: If the internal ID contains a
 			// pathname separator, it's probably an attempt to
 			// make a path traversal attack, so ignore the path
@@ -838,7 +843,7 @@ public class BitstreamStorageManager
             {
                 sInternalId = sInternalId.substring(sInternalId.lastIndexOf(File.separator) + 1);
             }
-			
+
 			sIntermediatePath = getIntermediatePath(sInternalId);
 		}
 
