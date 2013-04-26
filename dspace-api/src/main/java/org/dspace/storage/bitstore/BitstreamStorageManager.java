@@ -253,9 +253,8 @@ public class BitstreamStorageManager
         //Dariah Test
         StorageClient client = StorageClient.createShibbolethClientAnyCert(LOCAL_URL + "/", IDP_URL, "TestUser", "test123");
         Long fileId= client.createFile(is, "application/octet-stream");
-        System.out.println("Stored file with id: " + fileId);
+        System.out.println("Stored  file with id: " + fileId);
         return fileId.intValue();
-
 
 //        // Create internal ID
 //        String id = Utils.generateKey();
