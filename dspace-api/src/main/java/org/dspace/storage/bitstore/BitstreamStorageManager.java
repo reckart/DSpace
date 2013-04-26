@@ -24,6 +24,8 @@ import org.dspace.core.Context;
 import org.dspace.core.Utils;
 import org.dspace.storage.rdbms.DatabaseManager;
 import org.dspace.storage.rdbms.TableRow;
+import org.opensaml.DefaultBootstrap;
+import org.opensaml.xml.ConfigurationException;
 
 import de.tudarmstadt.ukp.dariah.storage.client.StorageClient;
 import edu.sdsc.grid.io.FileFactory;
@@ -251,7 +253,19 @@ public class BitstreamStorageManager
             throws SQLException, IOException
     {
         //Dariah Test
-        StorageClient client = StorageClient.createShibbolethClientAnyCert(LOCAL_URL + "/", IDP_URL, "TestUser", "test123");
+        try {
+            DefaultBootstrap.bootstrap();
+        }
+        catch (ConfigurationException e) {
+            e.printStackTrace();
+        }
+
+        //LIVE
+        //StorageClient client = StorageClient.createShibbolethClientAnyCert(LOCAL_URL + "/", IDP_URL, "TestUser", "test123");
+
+        //Local
+        StorageClient client = StorageClient.createClient(LOCAL_URL);
+
         Long fileId= client.createFile(is, "application/octet-stream");
         System.out.println("Stored  file with id: " + fileId);
         return fileId.intValue();
