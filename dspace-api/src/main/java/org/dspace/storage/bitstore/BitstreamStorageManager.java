@@ -68,8 +68,6 @@ public class BitstreamStorageManager
     /** log4j log */
     private static Logger log = Logger.getLogger(BitstreamStorageManager.class);
 
-    private static final String IDP_URL = "https://ldap-dariah.esc.rzg.mpg.de/idp/profile/SAML2/SOAP/ECP";
-    private static final String LOCAL_URL = "http://localhost:8080/StorageImplementation";
 	/**
 	 * The asset store locations. The information for each GeneralFile in the
 	 * array comes from dspace.cfg, so see the comments in that file.
@@ -88,6 +86,7 @@ public class BitstreamStorageManager
 	 * SRBFileSystem object to create an SRBFile object
 	 */
 	private static GeneralFile[] assetStores;
+	private static DARIAHStorageAccount dariahAccount;
 
     /** The asset store to use for new bitstreams */
     private static int incoming;
@@ -134,11 +133,17 @@ public class BitstreamStorageManager
 					ConfigurationManager
 							.getProperty("srb.defaultstorageresource"),
 					ConfigurationManager.getProperty("srb.mcatzone")));
-		} else {
+		}else if (ConfigurationManager.getProperty("dariah.baseurl") != null) {
+            stores.add(new DARIAHStorageAccount( // dariah
+                    ConfigurationManager.getProperty("dariah.baseurl"),
+                    ConfigurationManager.getProperty("dariah.idpurl"),
+                    ConfigurationManager.getProperty("dariah.username"),
+                    ConfigurationManager.getProperty("dariah.password")));
+        } else {
 			log.error("No default assetstore");
 		}
 
-		// read in assetstores .1, .2, ....
+		// read in assetstores .1, .2, 3, ....
 		for (int i = 1;; i++) { // i == 0 is default above
 			sAssetstoreDir = ConfigurationManager.getProperty("assetstore.dir."
 					+ i);
@@ -160,7 +165,14 @@ public class BitstreamStorageManager
 						ConfigurationManager
 								.getProperty("srb.defaultstorageresource." + i),
 						ConfigurationManager.getProperty("srb.mcatzone." + i)));
-			} else {
+			}if (ConfigurationManager.getProperty("dariah.baseurl." + i)
+                    != null) { // dariah
+                stores.add(new DARIAHStorageAccount(
+                        ConfigurationManager.getProperty("dariah.baseurl." + i),
+                        ConfigurationManager.getProperty("dariah.idpurl." + i),
+                        ConfigurationManager.getProperty("dariah.username." + i),
+                        ConfigurationManager.getProperty("dariah.password." + i)));
+            } else {
 				break; // must be at the end of the assetstores
 			}
 		}
@@ -169,6 +181,8 @@ public class BitstreamStorageManager
 		// the elements (objects) in the list are class
 		//   (1) String - conventional non-srb assetstore
 		//   (2) SRBAccount - srb assetstore
+	    //   (3) DARIAHStorageAccount - dariah assetstore
+
 		assetStores = new GeneralFile[stores.size()];
 		for (int i = 0; i < stores.size(); i++) {
 			Object o = stores.get(i);
@@ -202,7 +216,10 @@ public class BitstreamStorageManager
 					log.error("srb.parentdir is undefined for assetstore " + i);
 				}
 				assetStores[i] = new SRBFile(srbFileSystem, sSRBAssetstore);
-			} else {
+			}else if (o instanceof DARIAHStorageAccount) {
+
+			    dariahAccount = (DARIAHStorageAccount)o;
+            } else {
 				log.error("Unexpected " + o.getClass().toString()
 						+ " with assetstore " + i);
 			}
@@ -260,11 +277,9 @@ public class BitstreamStorageManager
             e.printStackTrace();
         }
 
-        //LIVE
-        //StorageClient client = StorageClient.createShibbolethClientAnyCert(LOCAL_URL + "/", IDP_URL, "TestUser", "test123");
 
         //Local
-        StorageClient client = StorageClient.createClient(LOCAL_URL);
+        StorageClient client = StorageClient.createClient(dariahAccount.getBaseUrl());
 
         Long fileId= client.createFile(is, "application/octet-stream");
         System.out.println("Stored  file with id: " + fileId);
