@@ -436,6 +436,13 @@
             <artifactId>postgresql</artifactId>
         </dependency>
 
+        <dependency>
+        	<groupId>de.tudarmstadt.ukp.dariah</groupId>
+        	<artifactId>
+        		de.tudarmstadt.ukp.dariah.storage.client
+        	</artifactId>
+        	<version>0.0.1-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 
 </project>
