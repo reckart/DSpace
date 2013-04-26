@@ -256,6 +256,7 @@ public class BitstreamStorageManager
         System.out.println("Stored file with id: " + fileId);
         return fileId.intValue();
 
+
 //        // Create internal ID
 //        String id = Utils.generateKey();
 //
