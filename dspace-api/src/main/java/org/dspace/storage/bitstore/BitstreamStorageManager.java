@@ -133,15 +133,17 @@ public class BitstreamStorageManager
 					ConfigurationManager
 							.getProperty("srb.defaultstorageresource"),
 					ConfigurationManager.getProperty("srb.mcatzone")));
-		}else if (ConfigurationManager.getProperty("dariah.baseurl") != null) {
+		}else {
+            log.error("No default assetstore");
+        }
+
+		if (ConfigurationManager.getProperty("dariah.baseurl") != null) {
             stores.add(new DARIAHStorageAccount( // dariah
                     ConfigurationManager.getProperty("dariah.baseurl"),
                     ConfigurationManager.getProperty("dariah.idpurl"),
                     ConfigurationManager.getProperty("dariah.username"),
                     ConfigurationManager.getProperty("dariah.password")));
-        } else {
-			log.error("No default assetstore");
-		}
+        }
 
 		// read in assetstores .1, .2, 3, ....
 		for (int i = 1;; i++) { // i == 0 is default above
@@ -165,7 +167,8 @@ public class BitstreamStorageManager
 						ConfigurationManager
 								.getProperty("srb.defaultstorageresource." + i),
 						ConfigurationManager.getProperty("srb.mcatzone." + i)));
-			}if (ConfigurationManager.getProperty("dariah.baseurl." + i)
+			}else
+			    if (ConfigurationManager.getProperty("dariah.baseurl." + i)
                     != null) { // dariah
                 stores.add(new DARIAHStorageAccount(
                         ConfigurationManager.getProperty("dariah.baseurl." + i),
