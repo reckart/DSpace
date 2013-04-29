@@ -24,12 +24,11 @@ import org.dspace.core.Context;
 import org.dspace.core.Utils;
 import org.dspace.storage.rdbms.DatabaseManager;
 import org.dspace.storage.rdbms.TableRow;
-import org.opensaml.DefaultBootstrap;
-import org.opensaml.xml.ConfigurationException;
 
 import de.tudarmstadt.ukp.dariah.storage.client.StorageClient;
 import edu.sdsc.grid.io.FileFactory;
 import edu.sdsc.grid.io.GeneralFile;
+import edu.sdsc.grid.io.GeneralFileOutputStream;
 import edu.sdsc.grid.io.local.LocalFile;
 import edu.sdsc.grid.io.srb.SRBAccount;
 import edu.sdsc.grid.io.srb.SRBFile;
@@ -272,112 +271,111 @@ public class BitstreamStorageManager
     public static int store(Context context, InputStream is)
             throws SQLException, IOException
     {
-        //Dariah Test
-        try {
-            DefaultBootstrap.bootstrap();
-        }
-        catch (ConfigurationException e) {
-            e.printStackTrace();
-        }
+
+        // Create internal ID
+        String id = Utils.generateKey();
 
 
-        //Local
+
+
+        // Local
         StorageClient client = StorageClient.createClient(dariahAccount.getBaseUrl());
+        try {
+            Long fileId = client.createFile(is, "application/octet-stream");
+            System.out.println("Stored  file with id: " + fileId);
+        }
+        catch (IOException e) {
+            System.out.println(e);
 
-        Long fileId= client.createFile(is, "application/octet-stream");
-        System.out.println("Stored  file with id: " + fileId);
-        return fileId.intValue();
+        }
 
-//        // Create internal ID
-//        String id = Utils.generateKey();
-//
-//        // Create a deleted bitstream row, using a separate DB connection
-//        TableRow bitstream;
-//        Context tempContext = null;
-//
-//        try
-//        {
-//            tempContext = new Context();
-//
-//            bitstream = DatabaseManager.row("Bitstream");
-//            bitstream.setColumn("deleted", true);
-//            bitstream.setColumn("internal_id", id);
-//
-//            /*
-//             * Set the store number of the new bitstream If you want to use some
-//             * other method of working out where to put a new bitstream, here's
-//             * where it should go
-//             */
-//            bitstream.setColumn("store_number", incoming);
-//
-//            DatabaseManager.insert(tempContext, bitstream);
-//
-//            tempContext.complete();
-//        }
-//        catch (SQLException sqle)
-//        {
-//            if (tempContext != null)
-//            {
-//                tempContext.abort();
-//            }
-//
-//            throw sqle;
-//        }
-//
-//        // Where on the file system will this new bitstream go?
-//		GeneralFile file = getFile(bitstream);
-//
-//        // Make the parent dirs if necessary
-//		GeneralFile parent = file.getParentFile();
-//
-//        if (!parent.exists())
-//        {
-//            parent.mkdirs();
-//        }
-//
-//        //Create the corresponding file and open it
-//        file.createNewFile();
-//
-//		GeneralFileOutputStream fos = FileFactory.newFileOutputStream(file);
-//
-//		// Read through a digest input stream that will work out the MD5
-//        DigestInputStream dis = null;
-//
-//        try
-//        {
-//            dis = new DigestInputStream(is, MessageDigest.getInstance("MD5"));
-//        }
-//        // Should never happen
-//        catch (NoSuchAlgorithmException nsae)
-//        {
-//            log.warn("Caught NoSuchAlgorithmException", nsae);
-//        }
-//
-//        Utils.bufferedCopy(dis, fos);
-//        fos.close();
-//        is.close();
-//
-//        bitstream.setColumn("size_bytes", file.length());
-//
-//        if (dis != null)
-//        {
-//            bitstream.setColumn("checksum", Utils.toHex(dis.getMessageDigest()
-//                    .digest()));
-//            bitstream.setColumn("checksum_algorithm", "MD5");
-//        }
-//
-//        bitstream.setColumn("deleted", false);
-//        DatabaseManager.update(context, bitstream);
-//
-//        int bitstreamId = bitstream.getIntColumn("bitstream_id");
-//
-//        if (log.isDebugEnabled())
-//        {
-//            log.debug("Stored bitstream " + bitstreamId + " in file "
-//                    + file.getAbsolutePath());
-//        }
-//
-//        return bitstreamId;
+        // Create a deleted bitstream row, using a separate DB connection
+        TableRow bitstream;
+        Context tempContext = null;
+
+        try
+        {
+            tempContext = new Context();
+
+            bitstream = DatabaseManager.row("Bitstream");
+            bitstream.setColumn("deleted", true);
+            bitstream.setColumn("internal_id", id);
+
+            /*
+             * Set the store number of the new bitstream If you want to use some
+             * other method of working out where to put a new bitstream, here's
+             * where it should go
+             */
+            bitstream.setColumn("store_number", incoming);
+
+            DatabaseManager.insert(tempContext, bitstream);
+
+            tempContext.complete();
+        }
+        catch (SQLException sqle)
+        {
+            if (tempContext != null)
+            {
+                tempContext.abort();
+            }
+
+            throw sqle;
+        }
+
+        // Where on the file system will this new bitstream go?
+		GeneralFile file = getFile(bitstream);
+
+        // Make the parent dirs if necessary
+		GeneralFile parent = file.getParentFile();
+
+        if (!parent.exists())
+        {
+            parent.mkdirs();
+        }
+
+        //Create the corresponding file and open it
+        file.createNewFile();
+
+		GeneralFileOutputStream fos = FileFactory.newFileOutputStream(file);
+
+		// Read through a digest input stream that will work out the MD5
+        DigestInputStream dis = null;
+
+        try
+        {
+            dis = new DigestInputStream(is, MessageDigest.getInstance("MD5"));
+        }
+        // Should never happen
+        catch (NoSuchAlgorithmException nsae)
+        {
+            log.warn("Caught NoSuchAlgorithmException", nsae);
+        }
+
+        Utils.bufferedCopy(dis, fos);
+        fos.close();
+        is.close();
+
+        bitstream.setColumn("size_bytes", file.length());
+
+        if (dis != null)
+        {
+            bitstream.setColumn("checksum", Utils.toHex(dis.getMessageDigest()
+                    .digest()));
+            bitstream.setColumn("checksum_algorithm", "MD5");
+        }
+
+        bitstream.setColumn("deleted", false);
+        DatabaseManager.update(context, bitstream);
+
+        int bitstreamId = bitstream.getIntColumn("bitstream_id");
+
+        if (log.isDebugEnabled())
+        {
+            log.debug("Stored bitstream " + bitstreamId + " in file "
+                    + file.getAbsolutePath());
+        }
+
+        return bitstreamId;
     }
 
 	/**
