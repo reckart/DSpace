@@ -585,9 +585,17 @@ public class BitstreamStorageManager
     {
         TableRow bitstream = DatabaseManager.find(context, "bitstream", id);
 
-		GeneralFile file = getFile(bitstream);
+        if(dariahAccount==null){
+            GeneralFile file = getFile(bitstream);
+            return (file != null) ? FileFactory.newFileInputStream(file) : null;
 
-		return (file != null) ? FileFactory.newFileInputStream(file) : null;
+        }else{
+            StorageClient client = StorageClient.createClient(dariahAccount.getBaseUrl());
+            String sInternalId = bitstream.getStringColumn("internal_id");
+
+            long fileId = Long.parseLong(sInternalId);
+            return client.readFile(fileId);
+        }
     }
 
     /**
