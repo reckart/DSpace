@@ -369,7 +369,19 @@ public class BitstreamStorageManager
             bitstream.setColumn("internal_id",  fileId.toString());
             bitstream.setColumn("size_bytes", fileSize);
 
+            DigestInputStream dis = null;
 
+            try {
+                dis = new DigestInputStream(is, MessageDigest.getInstance("MD5"));
+            }   // Should never happen
+            catch (NoSuchAlgorithmException nsae) {
+                log.warn("Caught NoSuchAlgorithmException", nsae);
+            }
+
+            if(dis!=null){
+                bitstream.setColumn("checksum", Utils.toHex(dis.getMessageDigest().digest()));
+                bitstream.setColumn("checksum_algorithm", "MD5");
+            }
 
         }
 
