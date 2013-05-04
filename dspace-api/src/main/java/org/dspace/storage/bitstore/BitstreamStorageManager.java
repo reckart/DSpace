@@ -24,6 +24,8 @@ import org.dspace.core.Context;
 import org.dspace.core.Utils;
 import org.dspace.storage.rdbms.DatabaseManager;
 import org.dspace.storage.rdbms.TableRow;
+import org.opensaml.DefaultBootstrap;
+import org.opensaml.xml.ConfigurationException;
 
 import de.tudarmstadt.ukp.dariah.storage.client.StorageClient;
 import edu.sdsc.grid.io.FileFactory;
@@ -221,6 +223,14 @@ public class BitstreamStorageManager
 			}else if (o instanceof DARIAHStorageAccount) {
 
 			    dariahAccount = (DARIAHStorageAccount)o;
+	            try {
+                    DefaultBootstrap.bootstrap();
+                }
+                catch (ConfigurationException e) {
+                    e.printStackTrace();
+                }
+
+
             } else {
 				log.error("Unexpected " + o.getClass().toString()
 						+ " with assetstore " + i);
@@ -352,13 +362,6 @@ public class BitstreamStorageManager
 
         }
         else {
-            // Local Dspace client
-//            try {
-//                DefaultBootstrap.bootstrap();
-//            }
-//            catch (ConfigurationException e1) {
-//                e1.printStackTrace();
-//            }
 
             //StorageClient client = StorageClient.createShibbolethClientAnyCert(dariahAccount.getBaseUrl(),dariahAccount.getIdpUrl(),dariahAccount.getUsername(),dariahAccount.getPasssword());
             StorageClient client = StorageClient.createClient(dariahAccount.getBaseUrl());
