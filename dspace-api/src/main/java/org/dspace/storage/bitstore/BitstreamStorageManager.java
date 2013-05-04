@@ -276,19 +276,6 @@ public class BitstreamStorageManager
         String id = Utils.generateKey();
 
 
-
-
-        // Local
-        StorageClient client = StorageClient.createClient(dariahAccount.getBaseUrl());
-        try {
-            Long fileId = client.createFile(is, "application/octet-stream");
-            System.out.println("Stored  file with id: " + fileId);
-        }
-        catch (IOException e) {
-            System.out.println(e);
-
-        }
-
         // Create a deleted bitstream row, using a separate DB connection
         TableRow bitstream;
         Context tempContext = null;
@@ -299,7 +286,9 @@ public class BitstreamStorageManager
 
             bitstream = DatabaseManager.row("Bitstream");
             bitstream.setColumn("deleted", true);
-            bitstream.setColumn("internal_id", id);
+            if (dariahAccount == null) {
+                bitstream.setColumn("internal_id", id);
+            }
 
             /*
              * Set the store number of the new bitstream If you want to use some
@@ -322,46 +311,66 @@ public class BitstreamStorageManager
             throw sqle;
         }
 
-        // Where on the file system will this new bitstream go?
-		GeneralFile file = getFile(bitstream);
 
-        // Make the parent dirs if necessary
-		GeneralFile parent = file.getParentFile();
+        if (dariahAccount == null) {
+            // Where on the file system will this new bitstream go?
+            GeneralFile file = getFile(bitstream);
 
-        if (!parent.exists())
-        {
-            parent.mkdirs();
+            // Make the parent dirs if necessary
+            GeneralFile parent = file.getParentFile();
+
+            if (!parent.exists()) {
+                parent.mkdirs();
+            }
+
+            // Create the corresponding file and open it
+            file.createNewFile();
+
+            GeneralFileOutputStream fos = FileFactory.newFileOutputStream(file);
+
+            // Read through a digest input stream that will work out the MD5
+            DigestInputStream dis = null;
+
+            try {
+                dis = new DigestInputStream(is, MessageDigest.getInstance("MD5"));
+            }
+            // Should never happen
+            catch (NoSuchAlgorithmException nsae) {
+                log.warn("Caught NoSuchAlgorithmException", nsae);
+            }
+
+            Utils.bufferedCopy(dis, fos);
+            fos.close();
+            is.close();
+
+            bitstream.setColumn("size_bytes", file.length());
+
+            if (dis != null) {
+                bitstream.setColumn("checksum", Utils.toHex(dis.getMessageDigest().digest()));
+                bitstream.setColumn("checksum_algorithm", "MD5");
+            }
+
         }
+        else {
+            // Local Dspace client
+//            try {
+//                DefaultBootstrap.bootstrap();
+//            }
+//            catch (ConfigurationException e1) {
+//                e1.printStackTrace();
+//            }
 
-        //Create the corresponding file and open it
-        file.createNewFile();
+            //StorageClient client = StorageClient.createShibbolethClientAnyCert(dariahAccount.getBaseUrl(),dariahAccount.getIdpUrl(),dariahAccount.getUsername(),dariahAccount.getPasssword());
+            StorageClient client = StorageClient.createClient(dariahAccount.getBaseUrl());
 
-		GeneralFileOutputStream fos = FileFactory.newFileOutputStream(file);
+            long fileSize = getInputStreamSize(is);
+            Long fileId = client.createFile(is, "application/octet-stream");
 
-		// Read through a digest input stream that will work out the MD5
-        DigestInputStream dis = null;
+            bitstream.setColumn("internal_id",  fileId.toString());
+            bitstream.setColumn("size_bytes", fileSize);
 
-        try
-        {
-            dis = new DigestInputStream(is, MessageDigest.getInstance("MD5"));
-        }
-        // Should never happen
-        catch (NoSuchAlgorithmException nsae)
-        {
-            log.warn("Caught NoSuchAlgorithmException", nsae);
-        }
 
-        Utils.bufferedCopy(dis, fos);
-        fos.close();
-        is.close();
 
-        bitstream.setColumn("size_bytes", file.length());
-
-        if (dis != null)
-        {
-            bitstream.setColumn("checksum", Utils.toHex(dis.getMessageDigest()
-                    .digest()));
-            bitstream.setColumn("checksum_algorithm", "MD5");
         }
 
         bitstream.setColumn("deleted", false);
@@ -371,14 +380,21 @@ public class BitstreamStorageManager
 
         if (log.isDebugEnabled())
         {
-            log.debug("Stored bitstream " + bitstreamId + " in file "
-                    + file.getAbsolutePath());
+            /*log.debug("Stored bitstream " + bitstreamId + " in file "
+                    + file.getAbsolutePath());*/
         }
 
         return bitstreamId;
     }
 
-	/**
+	private static long getInputStreamSize(InputStream aInputStream) throws IOException
+    {
+
+	    return aInputStream.available();
+
+    }
+
+    /**
 	 * Register a bitstream already in storage.
 	 *
 	 * @param context
