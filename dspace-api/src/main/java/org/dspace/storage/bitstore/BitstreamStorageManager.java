@@ -28,6 +28,7 @@ import org.opensaml.DefaultBootstrap;
 import org.opensaml.xml.ConfigurationException;
 
 import de.tudarmstadt.ukp.dariah.storage.client.StorageClient;
+import de.tudarmstadt.ukp.dariah.storage.client.TestManager;
 import edu.sdsc.grid.io.FileFactory;
 import edu.sdsc.grid.io.GeneralFile;
 import edu.sdsc.grid.io.GeneralFileOutputStream;
@@ -69,6 +70,11 @@ public class BitstreamStorageManager
     /** log4j log */
     private static Logger log = Logger.getLogger(BitstreamStorageManager.class);
 
+
+    private static final String IDP_URL = "https://ldap-dariah.esc.rzg.mpg.de/idp/profile/SAML2/SOAP/ECP";
+    private static final String BASE_URL = "https://ipedariah1.lsdf.kit.edu/dariah_storage";
+
+
 	/**
 	 * The asset store locations. The information for each GeneralFile in the
 	 * array comes from dspace.cfg, so see the comments in that file.
@@ -91,6 +97,9 @@ public class BitstreamStorageManager
 
     /** The asset store to use for new bitstreams */
     private static int incoming;
+
+
+    private static TestManager tm;
 
     // These settings control the way an identifier is hashed into
     // directory and file names
@@ -363,10 +372,38 @@ public class BitstreamStorageManager
         }
         else {
 
-            //StorageClient client = StorageClient.createShibbolethClientAnyCert(dariahAccount.getBaseUrl(),dariahAccount.getIdpUrl(),dariahAccount.getUsername(),dariahAccount.getPasssword());
-            StorageClient client = StorageClient.createClient(dariahAccount.getBaseUrl());
 
-            long fileSize = getInputStreamSize(is);
+            try {
+                DefaultBootstrap.bootstrap();
+            }
+            catch (ConfigurationException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+
+////            StorageClient client = StorageClient.createShibbolethClientAnyCert(BASE_URL + "/", IDP_URL,
+////                    "TestUser", "test123");
+//
+//            System.out.println("BASE URL: "+dariahAccount.getBaseUrl());
+//            System.out.println("IDP URL: "+dariahAccount.getIdpUrl());
+//            System.out.println("USERNAME: "+dariahAccount.getUsername());
+//            System.out.println("PW: "+dariahAccount.getPasssword());
+//
+//            System.out.println("BASE URL: "+BASE_URL + "/");
+//            System.out.println("IDP URL: "+IDP_URL);
+//            System.out.println("USERNAME: "+"TestUser");
+//            System.out.println("PW: "+"test123");
+
+
+//            StorageClient client = StorageClient.createShibbolethClientAnyCert(dariahAccount.getBaseUrl()+ "/, dariahAccount.getIdpUrl(),
+//                    dariahAccount.getUsername(), dariahAccount.getPasssword());
+//
+//            tm = new TestManager();
+//            tm.create(client, "test");
+
+
+            StorageClient client = getDariahClient();
+            long fileSize =is.available();
             Long fileId = client.createFile(is, "application/octet-stream");
 
             bitstream.setColumn("internal_id",  fileId.toString());
@@ -402,12 +439,7 @@ public class BitstreamStorageManager
         return bitstreamId;
     }
 
-	private static long getInputStreamSize(InputStream aInputStream) throws IOException
-    {
 
-	    return aInputStream.available();
-
-    }
 
     /**
 	 * Register a bitstream already in storage.
@@ -593,7 +625,7 @@ public class BitstreamStorageManager
             return (file != null) ? FileFactory.newFileInputStream(file) : null;
 
         }else{
-            StorageClient client = StorageClient.createClient(dariahAccount.getBaseUrl());
+            StorageClient client = getDariahClient();
             String sInternalId = bitstream.getStringColumn("internal_id");
 
             long fileId = Long.parseLong(sInternalId);
@@ -962,5 +994,27 @@ public class BitstreamStorageManager
 		buf.append(File.separator);
 		return buf.toString();
 	}
+
+
+
+
+	/**
+	 * Creates Dariah StorageClient
+	 * @return
+	 */
+    private static StorageClient getDariahClient()
+    {
+
+        if(dariahAccount==null) {
+            return null;
+        }
+        //Live
+        return StorageClient.createShibbolethClientAnyCert(dariahAccount.getBaseUrl()+"/",dariahAccount.getIdpUrl(),dariahAccount.getUsername(),dariahAccount.getPasssword());
+
+        //Local
+        //return StorageClient.createClient(dariahAccount.getBaseUrl());
+
+    }
+
 
 }
