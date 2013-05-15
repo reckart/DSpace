@@ -28,8 +28,10 @@ import org.opensaml.DefaultBootstrap;
 import org.opensaml.xml.ConfigurationException;
 
 import de.tudarmstadt.ukp.dariah.storage.client.StorageClient;
+import de.tudarmstadt.ukp.dariah.storage.client.TestManager;
 import edu.sdsc.grid.io.FileFactory;
 import edu.sdsc.grid.io.GeneralFile;
+import edu.sdsc.grid.io.GeneralFileOutputStream;
 import edu.sdsc.grid.io.local.LocalFile;
 import edu.sdsc.grid.io.srb.SRBAccount;
 import edu.sdsc.grid.io.srb.SRBFile;
@@ -68,6 +70,11 @@ public class BitstreamStorageManager
     /** log4j log */
     private static Logger log = Logger.getLogger(BitstreamStorageManager.class);
 
+
+    private static final String IDP_URL = "https://ldap-dariah.esc.rzg.mpg.de/idp/profile/SAML2/SOAP/ECP";
+    private static final String BASE_URL = "https://ipedariah1.lsdf.kit.edu/dariah_storage";
+
+
 	/**
 	 * The asset store locations. The information for each GeneralFile in the
 	 * array comes from dspace.cfg, so see the comments in that file.
@@ -90,6 +97,9 @@ public class BitstreamStorageManager
 
     /** The asset store to use for new bitstreams */
     private static int incoming;
+
+
+    private static TestManager tm;
 
     // These settings control the way an identifier is hashed into
     // directory and file names
@@ -133,15 +143,17 @@ public class BitstreamStorageManager
 					ConfigurationManager
 							.getProperty("srb.defaultstorageresource"),
 					ConfigurationManager.getProperty("srb.mcatzone")));
-		}else if (ConfigurationManager.getProperty("dariah.baseurl") != null) {
+		}else {
+            log.error("No default assetstore");
+        }
+
+		if (ConfigurationManager.getProperty("dariah.baseurl") != null) {
             stores.add(new DARIAHStorageAccount( // dariah
                     ConfigurationManager.getProperty("dariah.baseurl"),
                     ConfigurationManager.getProperty("dariah.idpurl"),
                     ConfigurationManager.getProperty("dariah.username"),
                     ConfigurationManager.getProperty("dariah.password")));
-        } else {
-			log.error("No default assetstore");
-		}
+        }
 
 		// read in assetstores .1, .2, 3, ....
 		for (int i = 1;; i++) { // i == 0 is default above
@@ -165,7 +177,8 @@ public class BitstreamStorageManager
 						ConfigurationManager
 								.getProperty("srb.defaultstorageresource." + i),
 						ConfigurationManager.getProperty("srb.mcatzone." + i)));
-			}if (ConfigurationManager.getProperty("dariah.baseurl." + i)
+			}else
+			    if (ConfigurationManager.getProperty("dariah.baseurl." + i)
                     != null) { // dariah
                 stores.add(new DARIAHStorageAccount(
                         ConfigurationManager.getProperty("dariah.baseurl." + i),
@@ -219,6 +232,14 @@ public class BitstreamStorageManager
 			}else if (o instanceof DARIAHStorageAccount) {
 
 			    dariahAccount = (DARIAHStorageAccount)o;
+	            try {
+                    DefaultBootstrap.bootstrap();
+                }
+                catch (ConfigurationException e) {
+                    e.printStackTrace();
+                }
+
+
             } else {
 				log.error("Unexpected " + o.getClass().toString()
 						+ " with assetstore " + i);
@@ -269,115 +290,158 @@ public class BitstreamStorageManager
     public static int store(Context context, InputStream is)
             throws SQLException, IOException
     {
-        //Dariah Test
-        try {
-            DefaultBootstrap.bootstrap();
+
+        // Create internal ID
+        String id = Utils.generateKey();
+
+
+        // Create a deleted bitstream row, using a separate DB connection
+        TableRow bitstream;
+        Context tempContext = null;
+
+        try
+        {
+            tempContext = new Context();
+
+            bitstream = DatabaseManager.row("Bitstream");
+            bitstream.setColumn("deleted", true);
+            if (dariahAccount == null) {
+                bitstream.setColumn("internal_id", id);
+            }
+
+            /*
+             * Set the store number of the new bitstream If you want to use some
+             * other method of working out where to put a new bitstream, here's
+             * where it should go
+             */
+            bitstream.setColumn("store_number", incoming);
+
+            DatabaseManager.insert(tempContext, bitstream);
+
+            tempContext.complete();
         }
-        catch (ConfigurationException e) {
-            e.printStackTrace();
+        catch (SQLException sqle)
+        {
+            if (tempContext != null)
+            {
+                tempContext.abort();
+            }
+
+            throw sqle;
         }
 
 
-        //Local
-        StorageClient client = StorageClient.createClient(dariahAccount.getBaseUrl());
+        if (dariahAccount == null) {
+            // Where on the file system will this new bitstream go?
+            GeneralFile file = getFile(bitstream);
 
-        Long fileId= client.createFile(is, "application/octet-stream");
-        System.out.println("Stored  file with id: " + fileId);
-        return fileId.intValue();
+            // Make the parent dirs if necessary
+            GeneralFile parent = file.getParentFile();
 
-//        // Create internal ID
-//        String id = Utils.generateKey();
+            if (!parent.exists()) {
+                parent.mkdirs();
+            }
+
+            // Create the corresponding file and open it
+            file.createNewFile();
+
+            GeneralFileOutputStream fos = FileFactory.newFileOutputStream(file);
+
+            // Read through a digest input stream that will work out the MD5
+            DigestInputStream dis = null;
+
+            try {
+                dis = new DigestInputStream(is, MessageDigest.getInstance("MD5"));
+            }
+            // Should never happen
+            catch (NoSuchAlgorithmException nsae) {
+                log.warn("Caught NoSuchAlgorithmException", nsae);
+            }
+
+            Utils.bufferedCopy(dis, fos);
+            fos.close();
+            is.close();
+
+            bitstream.setColumn("size_bytes", file.length());
+
+            if (dis != null) {
+                bitstream.setColumn("checksum", Utils.toHex(dis.getMessageDigest().digest()));
+                bitstream.setColumn("checksum_algorithm", "MD5");
+            }
+
+        }
+        else {
+
+
+            try {
+                DefaultBootstrap.bootstrap();
+            }
+            catch (ConfigurationException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+
+////            StorageClient client = StorageClient.createShibbolethClientAnyCert(BASE_URL + "/", IDP_URL,
+////                    "TestUser", "test123");
 //
-//        // Create a deleted bitstream row, using a separate DB connection
-//        TableRow bitstream;
-//        Context tempContext = null;
+//            System.out.println("BASE URL: "+dariahAccount.getBaseUrl());
+//            System.out.println("IDP URL: "+dariahAccount.getIdpUrl());
+//            System.out.println("USERNAME: "+dariahAccount.getUsername());
+//            System.out.println("PW: "+dariahAccount.getPasssword());
 //
-//        try
-//        {
-//            tempContext = new Context();
+//            System.out.println("BASE URL: "+BASE_URL + "/");
+//            System.out.println("IDP URL: "+IDP_URL);
+//            System.out.println("USERNAME: "+"TestUser");
+//            System.out.println("PW: "+"test123");
+
+
+//            StorageClient client = StorageClient.createShibbolethClientAnyCert(dariahAccount.getBaseUrl()+ "/, dariahAccount.getIdpUrl(),
+//                    dariahAccount.getUsername(), dariahAccount.getPasssword());
 //
-//            bitstream = DatabaseManager.row("Bitstream");
-//            bitstream.setColumn("deleted", true);
-//            bitstream.setColumn("internal_id", id);
-//
-//            /*
-//             * Set the store number of the new bitstream If you want to use some
-//             * other method of working out where to put a new bitstream, here's
-//             * where it should go
-//             */
-//            bitstream.setColumn("store_number", incoming);
-//
-//            DatabaseManager.insert(tempContext, bitstream);
-//
-//            tempContext.complete();
-//        }
-//        catch (SQLException sqle)
-//        {
-//            if (tempContext != null)
-//            {
-//                tempContext.abort();
-//            }
-//
-//            throw sqle;
-//        }
-//
-//        // Where on the file system will this new bitstream go?
-//		GeneralFile file = getFile(bitstream);
-//
-//        // Make the parent dirs if necessary
-//		GeneralFile parent = file.getParentFile();
-//
-//        if (!parent.exists())
-//        {
-//            parent.mkdirs();
-//        }
-//
-//        //Create the corresponding file and open it
-//        file.createNewFile();
-//
-//		GeneralFileOutputStream fos = FileFactory.newFileOutputStream(file);
-//
-//		// Read through a digest input stream that will work out the MD5
-//        DigestInputStream dis = null;
-//
-//        try
-//        {
-//            dis = new DigestInputStream(is, MessageDigest.getInstance("MD5"));
-//        }
-//        // Should never happen
-//        catch (NoSuchAlgorithmException nsae)
-//        {
-//            log.warn("Caught NoSuchAlgorithmException", nsae);
-//        }
-//
-//        Utils.bufferedCopy(dis, fos);
-//        fos.close();
-//        is.close();
-//
-//        bitstream.setColumn("size_bytes", file.length());
-//
-//        if (dis != null)
-//        {
-//            bitstream.setColumn("checksum", Utils.toHex(dis.getMessageDigest()
-//                    .digest()));
-//            bitstream.setColumn("checksum_algorithm", "MD5");
-//        }
-//
-//        bitstream.setColumn("deleted", false);
-//        DatabaseManager.update(context, bitstream);
-//
-//        int bitstreamId = bitstream.getIntColumn("bitstream_id");
-//
-//        if (log.isDebugEnabled())
-//        {
-//            log.debug("Stored bitstream " + bitstreamId + " in file "
-//                    + file.getAbsolutePath());
-//        }
-//
-//        return bitstreamId;
+//            tm = new TestManager();
+//            tm.create(client, "test");
+
+
+            StorageClient client = getDariahClient();
+            long fileSize =is.available();
+            Long fileId = client.createFile(is, "application/octet-stream");
+
+            bitstream.setColumn("internal_id",  fileId.toString());
+            bitstream.setColumn("size_bytes", fileSize);
+
+            DigestInputStream dis = null;
+
+            try {
+                dis = new DigestInputStream(is, MessageDigest.getInstance("MD5"));
+            }   // Should never happen
+            catch (NoSuchAlgorithmException nsae) {
+                log.warn("Caught NoSuchAlgorithmException", nsae);
+            }
+
+            if(dis!=null){
+                bitstream.setColumn("checksum", Utils.toHex(dis.getMessageDigest().digest()));
+                bitstream.setColumn("checksum_algorithm", "MD5");
+            }
+
+        }
+
+        bitstream.setColumn("deleted", false);
+        DatabaseManager.update(context, bitstream);
+
+        int bitstreamId = bitstream.getIntColumn("bitstream_id");
+
+        if (log.isDebugEnabled())
+        {
+            /*log.debug("Stored bitstream " + bitstreamId + " in file "
+                    + file.getAbsolutePath());*/
+        }
+
+        return bitstreamId;
     }
 
-	/**
+
+
+    /**
 	 * Register a bitstream already in storage.
 	 *
 	 * @param context
@@ -556,9 +620,17 @@ public class BitstreamStorageManager
     {
         TableRow bitstream = DatabaseManager.find(context, "bitstream", id);
 
-		GeneralFile file = getFile(bitstream);
+        if(dariahAccount==null){
+            GeneralFile file = getFile(bitstream);
+            return (file != null) ? FileFactory.newFileInputStream(file) : null;
 
-		return (file != null) ? FileFactory.newFileInputStream(file) : null;
+        }else{
+            StorageClient client = getDariahClient();
+            String sInternalId = bitstream.getStringColumn("internal_id");
+
+            long fileId = Long.parseLong(sInternalId);
+            return client.readFile(fileId);
+        }
     }
 
     /**
@@ -922,5 +994,27 @@ public class BitstreamStorageManager
 		buf.append(File.separator);
 		return buf.toString();
 	}
+
+
+
+
+	/**
+	 * Creates Dariah StorageClient
+	 * @return
+	 */
+    private static StorageClient getDariahClient()
+    {
+
+        if(dariahAccount==null) {
+            return null;
+        }
+        //Live
+        return StorageClient.createShibbolethClientAnyCert(dariahAccount.getBaseUrl()+"/",dariahAccount.getIdpUrl(),dariahAccount.getUsername(),dariahAccount.getPasssword());
+
+        //Local
+        //return StorageClient.createClient(dariahAccount.getBaseUrl());
+
+    }
+
 
 }
