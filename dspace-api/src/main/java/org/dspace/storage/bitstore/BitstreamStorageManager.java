@@ -372,12 +372,11 @@ public class BitstreamStorageManager
         }
         else {
 
-
+            //Dariah storage bootstrap
             try {
                 DefaultBootstrap.bootstrap();
             }
             catch (ConfigurationException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
 
@@ -457,6 +456,9 @@ public class BitstreamStorageManager
 	 */
 	public static int register(Context context, int assetstore,
 				String bitstreamPath) throws SQLException, IOException {
+
+	    //TODO muss angepasst werden?
+
 
 		// mark this bitstream as a registered bitstream
 		String sInternalId = REGISTERED_FLAG + bitstreamPath;
@@ -592,6 +594,7 @@ public class BitstreamStorageManager
 	 * @return true if the bitstream is a registered file
 	 */
 	public static boolean isRegisteredBitstream(String internalId) {
+	    //TODO wird beim export aufgerufen!
 	    if (internalId.substring(0, REGISTERED_FLAG.length())
 	            .equals(REGISTERED_FLAG))
 	    {
@@ -677,6 +680,8 @@ public class BitstreamStorageManager
      */
     public static void cleanup(boolean deleteDbRecords, boolean verbose) throws SQLException, IOException
     {
+
+        //TODO muss angepasst werden?!
         Context context = null;
         BitstreamInfoDAO bitstreamInfoDAO = new BitstreamInfoDAO();
         int commitCounter = 0;
