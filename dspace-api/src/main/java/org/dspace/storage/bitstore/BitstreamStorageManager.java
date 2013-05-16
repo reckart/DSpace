@@ -28,7 +28,6 @@ import org.opensaml.DefaultBootstrap;
 import org.opensaml.xml.ConfigurationException;
 
 import de.tudarmstadt.ukp.dariah.storage.client.StorageClient;
-import de.tudarmstadt.ukp.dariah.storage.client.TestManager;
 import edu.sdsc.grid.io.FileFactory;
 import edu.sdsc.grid.io.GeneralFile;
 import edu.sdsc.grid.io.GeneralFileOutputStream;
@@ -69,12 +68,6 @@ public class BitstreamStorageManager
 {
     /** log4j log */
     private static Logger log = Logger.getLogger(BitstreamStorageManager.class);
-
-
-    private static final String IDP_URL = "https://ldap-dariah.esc.rzg.mpg.de/idp/profile/SAML2/SOAP/ECP";
-    private static final String BASE_URL = "https://ipedariah1.lsdf.kit.edu/dariah_storage";
-
-
 	/**
 	 * The asset store locations. The information for each GeneralFile in the
 	 * array comes from dspace.cfg, so see the comments in that file.
@@ -98,8 +91,6 @@ public class BitstreamStorageManager
     /** The asset store to use for new bitstreams */
     private static int incoming;
 
-
-    private static TestManager tm;
 
     // These settings control the way an identifier is hashed into
     // directory and file names
@@ -147,13 +138,7 @@ public class BitstreamStorageManager
             log.error("No default assetstore");
         }
 
-		if (ConfigurationManager.getProperty("dariah.baseurl") != null) {
-            stores.add(new DARIAHStorageAccount( // dariah
-                    ConfigurationManager.getProperty("dariah.baseurl"),
-                    ConfigurationManager.getProperty("dariah.idpurl"),
-                    ConfigurationManager.getProperty("dariah.username"),
-                    ConfigurationManager.getProperty("dariah.password")));
-        }
+
 
 		// read in assetstores .1, .2, 3, ....
 		for (int i = 1;; i++) { // i == 0 is default above
@@ -459,7 +444,6 @@ public class BitstreamStorageManager
 
 	    //TODO muss angepasst werden?
 
-
 		// mark this bitstream as a registered bitstream
 		String sInternalId = REGISTERED_FLAG + bitstreamPath;
 
@@ -697,6 +681,16 @@ public class BitstreamStorageManager
 
             for (TableRow row : storage) {
                 int bid = row.getIntColumn("bitstream_id");
+
+
+
+                //
+                if(dariahAccount!=null){
+                    StorageClient client = getDariahClient();
+                    String sInternalId = row.getStringColumn("internal_id");
+
+                    client.deleteFile(Long.parseLong(sInternalId));
+                }
 
 				GeneralFile file = getFile(row);
 
