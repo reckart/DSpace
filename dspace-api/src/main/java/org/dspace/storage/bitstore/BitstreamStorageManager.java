@@ -137,8 +137,13 @@ public class BitstreamStorageManager
 		}else {
             log.error("No default assetstore");
         }
-
-
+		if (ConfigurationManager.getProperty("dariah.baseurl") != null) {
+	            stores.add(new DARIAHStorageAccount( // dariah
+	                    ConfigurationManager.getProperty("dariah.baseurl"),
+	                    ConfigurationManager.getProperty("dariah.idpurl"),
+	                    ConfigurationManager.getProperty("dariah.username"),
+	                    ConfigurationManager.getProperty("dariah.password")));
+	     }
 
 		// read in assetstores .1, .2, 3, ....
 		for (int i = 1;; i++) { // i == 0 is default above
@@ -419,8 +424,7 @@ public class BitstreamStorageManager
             /*log.debug("Stored bitstream " + bitstreamId + " in file "
                     + file.getAbsolutePath());*/
         }
-
-        return bitstreamId;
+        return  bitstreamId;
     }
 
 
@@ -441,8 +445,6 @@ public class BitstreamStorageManager
 	 */
 	public static int register(Context context, int assetstore,
 				String bitstreamPath) throws SQLException, IOException {
-
-	    //TODO muss angepasst werden?
 
 		// mark this bitstream as a registered bitstream
 		String sInternalId = REGISTERED_FLAG + bitstreamPath;
@@ -468,9 +470,11 @@ public class BitstreamStorageManager
 			throw sqle;
 		}
 
-		// get a reference to the file
-		GeneralFile file = getFile(bitstream);
-
+        // get a reference to the file
+		GeneralFile file=null;
+		if(dariahAccount==null){
+		    file = getFile(bitstream);
+		}
 		// read through a DigestInputStream that will work out the MD5
 		//
 		// DSpace refers to checksum, writes it in METS, and uses it as an
@@ -480,7 +484,7 @@ public class BitstreamStorageManager
 		//
 		// To remain compatible with DSpace we calculate an MD5 checksum on
 		// LOCAL registered files. But for REMOTE (e.g. SRB) files we
-		// calculate an MD5 on just the fileNAME. The reasoning is that in the
+		// calculate an MD5 on just the . The reasoning is that in the
 		// case of a remote file, calculating an MD5 on the file itself will
 		// generate network traffic to read the file's bytes. In this case it
 		// would be better have a proxy process calculate MD5 and store it as
@@ -489,7 +493,28 @@ public class BitstreamStorageManager
 		// TODO set this up as a proxy server process so no net activity
 
 		// FIXME this is a first class HACK! for the reasons described above
-		if (file instanceof LocalFile)
+
+
+		//if dariah storage is used, calculate MD5 of filename
+		if(dariahAccount!=null){
+		 // get MD5 on just the filename (!) for Dariah file
+            int iLastSlash = bitstreamPath.lastIndexOf('/');
+            String sFilename = bitstreamPath.substring(iLastSlash + 1);
+            MessageDigest md = null;
+            try
+            {
+                md = MessageDigest.getInstance("MD5");
+            }
+            catch (NoSuchAlgorithmException e)
+            {
+                log.error("Caught NoSuchAlgorithmException", e);
+                throw new IOException("Invalid checksum algorithm", e);
+            }
+            bitstream.setColumn("checksum",
+                    Utils.toHex(md.digest(sFilename.getBytes())));
+
+
+		}else if (file instanceof LocalFile)
 		{
 
 			// get MD5 on the file for local file
@@ -578,7 +603,6 @@ public class BitstreamStorageManager
 	 * @return true if the bitstream is a registered file
 	 */
 	public static boolean isRegisteredBitstream(String internalId) {
-	    //TODO wird beim export aufgerufen!
 	    if (internalId.substring(0, REGISTERED_FLAG.length())
 	            .equals(REGISTERED_FLAG))
 	    {
@@ -605,6 +629,7 @@ public class BitstreamStorageManager
     public static InputStream retrieve(Context context, int id)
             throws SQLException, IOException
     {
+
         TableRow bitstream = DatabaseManager.find(context, "bitstream", id);
 
         if(dariahAccount==null){
@@ -665,7 +690,6 @@ public class BitstreamStorageManager
     public static void cleanup(boolean deleteDbRecords, boolean verbose) throws SQLException, IOException
     {
 
-        //TODO muss angepasst werden?!
         Context context = null;
         BitstreamInfoDAO bitstreamInfoDAO = new BitstreamInfoDAO();
         int commitCounter = 0;
@@ -690,6 +714,7 @@ public class BitstreamStorageManager
                     String sInternalId = row.getStringColumn("internal_id");
 
                     client.deleteFile(Long.parseLong(sInternalId));
+                    continue;
                 }
 
 				GeneralFile file = getFile(row);
