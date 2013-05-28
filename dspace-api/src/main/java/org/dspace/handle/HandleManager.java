@@ -7,6 +7,7 @@
  */
 package org.dspace.handle;
 
+import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +24,8 @@ import org.dspace.core.Context;
 import org.dspace.storage.rdbms.DatabaseManager;
 import org.dspace.storage.rdbms.TableRow;
 import org.dspace.storage.rdbms.TableRowIterator;
+
+import cz.cuni.mff.ufal.DSpaceApi;
 
 /**
  * Interface to the <a href="http://www.handle.net" target=_new>CNRI Handle
@@ -139,7 +142,21 @@ public class HandleManager
             throws SQLException
     {
         TableRow handle = DatabaseManager.create(context, "Handle");
-        String handleId = createId(handle.getIntColumn("handle_id"));
+        //Dspace:
+        //String handleId = createId(handle.getIntColumn("handle_id"));
+
+
+      //<UFAL>
+              String handleId = null;
+              try{
+                  handleId = DSpaceApi.handle_HandleManager_createId(log, handle.getIntColumn("handle_id"));
+                  // if the handle created successfully register the final handle
+                  DSpaceApi.handle_HandleManager_registerFinalHandleURL(log, handleId);
+              } catch(IOException e) {
+                  //DSpaceApi.getFunctionalityManager().setErrorMessage("PID Service is not working. Please contact the administrator.");
+                  throw new IllegalStateException("PID Service is not working. Please contact the administrator.");
+              }
+      //</UFAL>
 
         handle.setColumn("handle", handleId);
         handle.setColumn("resource_type_id", dso.getType());
@@ -234,24 +251,21 @@ public class HandleManager
     public static void unbindHandle(Context context, DSpaceObject dso)
         throws SQLException
     {
-        TableRowIterator rows = getInternalHandles(context, dso.getType(), dso.getID());
-        if (rows != null)
+        TableRow row = getHandleInternal(context, dso.getType(), dso.getID());
+        if (row != null)
         {
-            while (rows.hasNext())
-            {
-                TableRow row = rows.next();
-                //Only set the "resouce_id" column to null when unbinding a handle.
-                // We want to keep around the "resource_type_id" value, so that we
-                // can verify during a restore whether the same *type* of resource
-                // is reusing this handle!
-                row.setColumnNull("resource_id");
-                DatabaseManager.update(context, row);
+            //Only set the "resouce_id" column to null when unbinding a handle.
+            // We want to keep around the "resource_type_id" value, so that we
+            // can verify during a restore whether the same *type* of resource
+            // is reusing this handle!
+            row.setColumnNull("resource_id");
+            DatabaseManager.update(context, row);
 
-                if(log.isDebugEnabled())
-                {
-                    log.debug("Unbound Handle " + row.getStringColumn("handle") + " from object " + Constants.typeText[dso.getType()] + " id=" + dso.getID());
-                }
+            if(log.isDebugEnabled())
+            {
+                log.debug("Unbound Handle " + row.getStringColumn("handle") + " from object " + Constants.typeText[dso.getType()] + " id=" + dso.getID());
             }
+
         }
         else
         {
@@ -359,8 +373,8 @@ public class HandleManager
     public static String findHandle(Context context, DSpaceObject dso)
             throws SQLException
     {
-        TableRowIterator rows = getInternalHandles(context, dso.getType(), dso.getID());
-        if (rows == null || !rows.hasNext())
+        TableRow row = getHandleInternal(context, dso.getType(), dso.getID());
+        if (row == null)
         {
             if (dso.getType() == Constants.SITE)
             {
@@ -373,21 +387,7 @@ public class HandleManager
         }
         else
         {
-            //TODO: Move this code away from the HandleManager & into the Identifier provider
-            //Attempt to retrieve a handle that does NOT look like {handle.part}/{handle.part}.{version}
-            String result = rows.next().getStringColumn("handle");
-            while (rows.hasNext())
-            {
-                TableRow row = rows.next();
-                //Ensure that the handle doesn't look like this 12346/213.{version}
-                //If we find a match that indicates that we have a proper handle
-                if(!row.getStringColumn("handle").matches(".*/.*\\.\\d+"))
-                {
-                    result = row.getStringColumn("handle");
-                }
-            }
-
-            return result;
+            return row.getStringColumn("handle");
         }
     }
 
@@ -414,7 +414,7 @@ public class HandleManager
         {
             while (iterator.hasNext())
             {
-                TableRow row = (TableRow) iterator.next();
+                TableRow row = iterator.next();
                 results.add(row.getStringColumn("handle"));
             }
         }
@@ -462,13 +462,13 @@ public class HandleManager
      * @exception SQLException
      *                If a database error occurs
      */
-    private static TableRowIterator getInternalHandles(Context context, int type, int id)
+    private static TableRow getHandleInternal(Context context, int type, int id)
             throws SQLException
     {
       	String sql = "SELECT * FROM Handle WHERE resource_type_id = ? " +
       				 "AND resource_id = ?";
 
-	return DatabaseManager.queryTable(context, "Handle", sql, type, id);
+	return DatabaseManager.querySingleTable(context, "Handle", sql, type, id);
     }
 
     /**
