@@ -36,6 +36,8 @@ import java.net.URLEncoder;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.dspace.core.ConfigurationManager;
+
 public class PIDService {
 	private static String PIDServiceURL;
 	private static String PIDServiceUSER;
@@ -52,13 +54,13 @@ public class PIDService {
 
 	private static void initialize() throws IOException {
 		initialized = true;
-		//PIDServiceURL = ConfigurationManager.getProperty("pidservice.url");
-		//PIDServiceUSER = ConfigurationManager.getProperty("pidservice.user");
-		//PIDServicePASS = ConfigurationManager.getProperty("pidservice.pass");
+		PIDServiceURL = ConfigurationManager.getProperty("pidservice.url");
+		PIDServiceUSER = ConfigurationManager.getProperty("pidservice.user");
+		PIDServicePASS = ConfigurationManager.getProperty("pidservice.pass");
 
-		PIDServiceURL = "http://demo.pidconsortium.eu:8444/handles/11148/";
-		PIDServiceUSER = "1014-01";
-		PIDServicePASS = "Feengae6";
+		//PIDServiceURL = "http://demo.pidconsortium.eu:8444/handles/11148/";
+		//PIDServiceUSER = "1014-01";
+		//PIDServicePASS = "Feengae6";
 
 		if (PIDServiceURL == null || PIDServiceURL.length() == 0) {
             throw new IOException("PIDService URL not configured.");
