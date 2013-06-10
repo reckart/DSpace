@@ -142,8 +142,9 @@ public class DSpaceApi {
 		 * itself should contain the PID as a substring
 		 */
 		log.debug("Asking for changing the PID '" + pid + "' to " + url);
-
-		if (!url.equals(PIDService.modifyPID(pid, url))) {
+		String modifiedUrl = PIDService.modifyPID(pid, url);
+		System.out.println(modifiedUrl);
+		if (!url.equals(modifiedUrl)) {
 			throw new IOException("Failed to map PID " + pid + " to " + url);
 		}
 	}
