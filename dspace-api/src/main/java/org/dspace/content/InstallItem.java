@@ -15,13 +15,11 @@ import org.dspace.core.Constants;
 import org.dspace.core.Context;
 import org.dspace.embargo.EmbargoManager;
 import org.dspace.event.Event;
-import org.dspace.identifier.IdentifierException;
-import org.dspace.identifier.IdentifierService;
-import org.dspace.utils.DSpace;
+import org.dspace.handle.HandleManager;
 
 /**
  * Support to install an Item in the archive.
- * 
+ *
  * @author dstuve
  * @version $Revision$
  */
@@ -30,12 +28,12 @@ public class InstallItem
     /**
      * Take an InProgressSubmission and turn it into a fully-archived Item,
      * creating a new Handle.
-     * 
+     *
      * @param c
      *            DSpace Context
      * @param is
      *            submission to install
-     * 
+     *
      * @return the fully archived Item
      */
     public static Item installItem(Context c, InProgressSubmission is)
@@ -45,14 +43,16 @@ public class InstallItem
     }
 
     /**
+     * Adapted to Epic Pid Handle by Dieter Hofmann
+     *
      * Take an InProgressSubmission and turn it into a fully-archived Item.
-     * 
+     *
      * @param c  current context
      * @param is
      *            submission to install
      * @param suppliedHandle
      *            the existing Handle to give to the installed item
-     * 
+     *
      * @return the fully archived Item
      */
     public static Item installItem(Context c, InProgressSubmission is,
@@ -60,6 +60,25 @@ public class InstallItem
             IOException, AuthorizeException
     {
         Item item = is.getItem();
+
+        //PID EPIC adaption
+        String handle;
+
+        // if no previous handle supplied, create one
+        if (suppliedHandle == null)
+        {
+            // create a new handle for this item
+            handle = HandleManager.createHandle(c, item);
+        }
+        else
+        {
+            // assign the supplied handle to this item
+            handle = HandleManager.createHandle(c, item, suppliedHandle);
+        }
+
+        populateHandleMetadata(item, handle);
+
+        /* DSpace handle original code
         IdentifierService identifierService = new DSpace().getSingletonService(IdentifierService.class);
         try {
             if(suppliedHandle == null)
@@ -70,7 +89,7 @@ public class InstallItem
             }
         } catch (IdentifierException e) {
             throw new RuntimeException("Can't create an Identifier!");
-        }
+        }*/
 
 
         populateMetadata(c, item);
@@ -78,6 +97,38 @@ public class InstallItem
         return finishItem(c, item, is);
 
     }
+
+    /**
+     * Binds the handle to the item
+     * @author Dieter Hofmann
+     * @param item
+     * @param handle
+     * @throws SQLException
+     * @throws IOException
+     * @throws AuthorizeException
+     */
+    private static void populateHandleMetadata(Item item, String handle)
+            throws SQLException, IOException, AuthorizeException
+        {
+            String handleref = HandleManager.getCanonicalForm(handle);
+
+            // Add handle as identifier.uri DC value.
+            // First check that identifier dosn't already exist.
+            boolean identifierExists = false;
+            DCValue[] identifiers = item.getDC("identifier", "uri", Item.ANY);
+            for (DCValue identifier : identifiers)
+            {
+                if (handleref.equals(identifier.value))
+                {
+                    identifierExists = true;
+                }
+            }
+            if (!identifierExists)
+            {
+                item.addDC("identifier", "uri", null, handleref);
+            }
+        }
+
 
     /**
      * Turn an InProgressSubmission into a fully-archived Item, for
@@ -102,6 +153,7 @@ public class InstallItem
     {
         Item item = is.getItem();
 
+        /*Dspace original handle
         IdentifierService identifierService = new DSpace().getSingletonService(IdentifierService.class);
         try {
             if(suppliedHandle == null)
@@ -113,19 +165,38 @@ public class InstallItem
         } catch (IdentifierException e) {
             throw new RuntimeException("Can't create an Identifier!");
         }
+        */
+        //EPIC PID adaption
+        String handle;
+
+        // if no handle supplied
+        if (suppliedHandle == null)
+        {
+            // create a new handle for this item
+            handle = HandleManager.createHandle(c, item);
+            //only populate handle metadata for new handles
+            // (existing handles should already be in the metadata -- as it was restored by ingest process)
+            populateHandleMetadata(item, handle);
+        }
+        else
+        {
+            // assign the supplied handle to this item
+            handle = HandleManager.createHandle(c, item, suppliedHandle);
+        }
+
 
         // Even though we are restoring an item it may not have the proper dates. So let's
         // double check that it has a date accessioned and date issued, and if either of those dates
         // are not set then set them to today.
         DCDate now = DCDate.getCurrent();
-        
+
         // If the item doesn't have a date.accessioned, create one.
         DCValue[] dateAccessioned = item.getDC("date", "accessioned", Item.ANY);
         if (dateAccessioned.length == 0)
         {
 	        item.addDC("date", "accessioned", null, now.toString());
         }
-        
+
         // create issue date if not present
         DCValue[] currentDateIssued = item.getDC("date", "issued", Item.ANY);
         if (currentDateIssued.length == 0)
@@ -133,7 +204,7 @@ public class InstallItem
             DCDate issued = new DCDate(now.getYear(),now.getMonth(),now.getDay(),-1,-1,-1);
             item.addDC("date", "issued", null, issued.toString());
         }
-        
+
         // Record that the item was restored
 		String provDescription = "Restored into DSpace on "+ now + " (GMT).";
 		item.addDC("description", "provenance", "en", provDescription);
@@ -223,9 +294,9 @@ public class InstallItem
     /**
      * Generate provenance-worthy description of the bitstreams contained in an
      * item.
-     * 
+     *
      * @param myitem  the item to generate description for
-     * 
+     *
      * @return provenance description
      */
     public static String getBitstreamProvenanceMessage(Item myitem)
@@ -239,12 +310,11 @@ public class InstallItem
         myMessage.append("No. of bitstreams: ").append(bitstreams.length).append("\n");
 
         // Add sizes and checksums of bitstreams
-        for (int j = 0; j < bitstreams.length; j++)
-        {
-            myMessage.append(bitstreams[j].getName()).append(": ")
-                    .append(bitstreams[j].getSize()).append(" bytes, checksum: ")
-                    .append(bitstreams[j].getChecksum()).append(" (")
-                    .append(bitstreams[j].getChecksumAlgorithm()).append(")\n");
+        for (Bitstream bitstream : bitstreams) {
+            myMessage.append(bitstream.getName()).append(": ")
+                    .append(bitstream.getSize()).append(" bytes, checksum: ")
+                    .append(bitstream.getChecksum()).append(" (")
+                    .append(bitstream.getChecksumAlgorithm()).append(")\n");
         }
 
         return myMessage.toString();
