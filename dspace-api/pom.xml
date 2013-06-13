@@ -21,6 +21,13 @@
         <root.basedir>${basedir}/..</root.basedir>
     </properties>
 
+	<repositories>
+		<repository>
+			<id>ukp-oss-snapshots</id>
+			<url>http://zoidberg.ukp.informatik.tu-darmstadt.de/artifactory/public-snapshots</url>
+		</repository>
+	</repositories>
+
     <!--
        Runtime and Compile Time dependencies for DSpace.
     -->
