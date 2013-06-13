@@ -85,6 +85,7 @@ public class PIDService {
 	 * EPIC PID API version 2
 	 * Docu: http://epic.gwdg.de/wiki/index.php?title=EPIC:API:v2:contribution#VIEW
 	 * Executes View, Create or Update method
+	 * @author Dieter Hofmann
 	 * @param method
 	 * @param pid
 	 * @param url
@@ -100,7 +101,15 @@ public class PIDService {
             try {
                 if (method == HTTPMethod.GET) {// GET
                     //NOT TESTET
-                    String getUrl = PIDServiceURL+pid;
+                    String pidParts[]  = pid.split("/");
+
+                    String getUrl = null;
+                    if(pidParts.length>=1) {
+                        getUrl=    PIDServiceURL+pidParts[pidParts.length-1];
+                    }
+                    else {
+                        getUrl=    PIDServiceURL+pid;
+                    }
                     HttpGet request = new HttpGet(getUrl);
                     request.addHeader(
                             "Authorization",
@@ -145,7 +154,15 @@ public class PIDService {
                 }
 
                 else if (method == HTTPMethod.PUT) {// MODIFY
-                    String putUrl = PIDServiceURL+pid;
+                    String pidParts[]  = pid.split("/");
+
+                    String putUrl = null;
+                    if(pidParts.length>=1) {
+                        putUrl=    PIDServiceURL+pidParts[pidParts.length-1];
+                    }
+                    else {
+                        putUrl=    PIDServiceURL+pid;
+                    }
 
                     HttpPut request = new HttpPut(putUrl);
                     request.addHeader(
@@ -182,19 +199,23 @@ public class PIDService {
 
     /**
      * Parses file id from HTTP response
+     * @author Dieter Hofmann
      */
     private static String getIdFromResponse(HttpResponse aRes)
     {
         Header value = aRes.getFirstHeader("Location");
         String valueString = value.getValue();
         String id = valueString.substring(valueString.lastIndexOf("/")+1);
+        String[] urlParts = PIDServiceURL.split("/");
+        String handleGroup= urlParts[urlParts.length-1];
 
-        return id;
+        return handleGroup+"/"+id;
      }
 
 
     /**
-     * EPIC PID API version 1, made by ufal
+     * EPIC PID API version 1, source ufal
+     * @author Dieter Hofmann
      * @param method
      * @param command
      * @param data

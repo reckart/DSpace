@@ -128,8 +128,10 @@ public class HandleManager
     //    }
 
     /**
+     *
      * Creates a new handle in the database.
      *
+     * Handle adapted to Epic PID by Dieter Hofmann, source UFAL
      * @param context
      *            DSpace context
      * @param dso
@@ -142,7 +144,7 @@ public class HandleManager
             throws SQLException
     {
         TableRow handle = DatabaseManager.create(context, "Handle");
-        //Dspace:
+        //Dspace handle
         //String handleId = createId(handle.getIntColumn("handle_id"));
 
 
