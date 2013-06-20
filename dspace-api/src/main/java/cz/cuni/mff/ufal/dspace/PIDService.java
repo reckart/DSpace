@@ -47,52 +47,62 @@ import org.apache.http.impl.client.DefaultHttpClient;
 import org.dspace.core.ConfigurationManager;
 import org.opensaml.xml.util.Base64;
 
-public class PIDService {
-	private static String PIDServiceURL;
-	private static String PIDServiceUSER;
-	private static String PIDServicePASS;
-	private static String PIDServiceVERSION;
+public class PIDService
+{
+    private static String PIDServiceURL;
+    private static String PIDServiceUSER;
+    private static String PIDServicePASS;
+    private static String PIDServiceVERSION;
+    private static String PIDServicePREFIX;
 
-	private static boolean initialized;
+    private static boolean initialized;
 
-	static class PIDServiceAuthenticator extends Authenticator {
-		@Override
-        public PasswordAuthentication getPasswordAuthentication() {
-			return (new PasswordAuthentication(PIDServiceUSER,
-					PIDServicePASS.toCharArray()));
-		}
-	}
-
-	private static void initialize() throws IOException {
-		initialized = true;
-		PIDServiceURL = ConfigurationManager.getProperty("pidservice.url");
-		PIDServiceUSER = ConfigurationManager.getProperty("pidservice.user");
-		PIDServicePASS = ConfigurationManager.getProperty("pidservice.pass");
-		PIDServiceVERSION = ConfigurationManager.getProperty("pidservice.ver");
-
-		if (PIDServiceURL == null || PIDServiceURL.length() == 0) {
-            throw new IOException("PIDService URL not configured.");
+    static class PIDServiceAuthenticator
+        extends Authenticator
+    {
+        @Override
+        public PasswordAuthentication getPasswordAuthentication()
+        {
+            return (new PasswordAuthentication(PIDServiceUSER, PIDServicePASS.toCharArray()));
         }
-	}
+    }
 
-	private static enum HTTPMethod {
-		GET, POST, PUT
-	}
+    private static void initialize()
+        throws IOException
+    {
+        initialized = true;
+        PIDServiceURL = ConfigurationManager.getProperty("handle.service.url");
+        PIDServiceUSER = ConfigurationManager.getProperty("handle.service.user");
+        PIDServicePASS = ConfigurationManager.getProperty("handle.service.pass");
+        PIDServicePREFIX = ConfigurationManager.getProperty("handle.prefix");
+        PIDServiceVERSION = ConfigurationManager.getProperty("handle.service.version");
 
-	static PIDServiceAuthenticator authenticator = new PIDServiceAuthenticator();
+        if (PIDServiceURL == null || PIDServiceURL.length() == 0) {
+            throw new IOException("PIDService URL not configured.");
+           // serviceNotConfigured  = true;
+        }
+    }
 
-	/**
-	 * EPIC PID API version 2
-	 * Docu: http://epic.gwdg.de/wiki/index.php?title=EPIC:API:v2:contribution#VIEW
-	 * Executes View, Create or Update method
-	 * @author Dieter Hofmann
-	 * @param method
-	 * @param pid
-	 * @param url
-	 * @param auth
-	 * @return returns request result
-	 * @throws IOException
-	 */
+    private static enum HTTPMethod
+    {
+        GET, POST, PUT
+    }
+
+    static PIDServiceAuthenticator authenticator = new PIDServiceAuthenticator();
+
+    /**
+     * EPIC PID API version 2 Docu:
+     * http://epic.gwdg.de/wiki/index.php?title=EPIC:API:v2:contribution#VIEW Executes View, Create
+     * or Update method
+     *
+     * @author Dieter Hofmann
+     * @param method
+     * @param pid
+     * @param url
+     * @param auth
+     * @return returns request result
+     * @throws IOException
+     */
     private static String sendPIDCommandV2(HTTPMethod method, String pid, String url, boolean auth)
         throws IOException
     {
@@ -100,16 +110,16 @@ public class PIDService {
             HttpClient httpClient = new DefaultHttpClient();
             try {
                 if (method == HTTPMethod.GET) {// GET
-                    //NOT TESTET
-                    String pidParts[]  = pid.split("/");
+                    // NOT TESTET
+                    /*
+                     * String pidParts[] = pid.split("/");
+                     *
+                     * String getUrl = null; if(pidParts.length>=1) { getUrl=
+                     * PIDServiceURL+pidParts[pidParts.length-1]; } else { getUrl=
+                     * PIDServiceURL+pid; }
+                     */
+                    String getUrl = PIDServiceURL + pid;
 
-                    String getUrl = null;
-                    if(pidParts.length>=1) {
-                        getUrl=    PIDServiceURL+pidParts[pidParts.length-1];
-                    }
-                    else {
-                        getUrl=    PIDServiceURL+pid;
-                    }
                     HttpGet request = new HttpGet(getUrl);
                     request.addHeader(
                             "Authorization",
@@ -120,8 +130,9 @@ public class PIDService {
 
                     HttpResponse response = httpClient.execute(request);
 
-                    //get JSON from response
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(response.getEntity().getContent(), "UTF-8"));
+                    // get JSON from response
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(response
+                            .getEntity().getContent(), "UTF-8"));
                     StringBuilder builder = new StringBuilder();
                     for (String line = null; (line = reader.readLine()) != null;) {
                         builder.append(line).append("\n");
@@ -154,15 +165,18 @@ public class PIDService {
                 }
 
                 else if (method == HTTPMethod.PUT) {// MODIFY
-                    String pidParts[]  = pid.split("/");
+
+                    /*String pidParts[] = pid.split("/");
 
                     String putUrl = null;
-                    if(pidParts.length>=1) {
-                        putUrl=    PIDServiceURL+pidParts[pidParts.length-1];
+                    if (pidParts.length >= 1) {
+                        putUrl = PIDServiceURL + pidParts[pidParts.length - 1];
                     }
                     else {
-                        putUrl=    PIDServiceURL+pid;
-                    }
+                        putUrl = PIDServiceURL + pid;
+                    }*/
+                    String putUrl = PIDServiceURL + pid;
+
 
                     HttpPut request = new HttpPut(putUrl);
                     request.addHeader(
@@ -185,7 +199,7 @@ public class PIDService {
 
                     return url;
                 }
-             }
+            }
             catch (Exception ex) {
                 ex.printStackTrace();
                 // handle exception here
@@ -199,22 +213,24 @@ public class PIDService {
 
     /**
      * Parses file id from HTTP response
+     *
      * @author Dieter Hofmann
      */
     private static String getIdFromResponse(HttpResponse aRes)
     {
         Header value = aRes.getFirstHeader("Location");
         String valueString = value.getValue();
-        String id = valueString.substring(valueString.lastIndexOf("/")+1);
-        String[] urlParts = PIDServiceURL.split("/");
-        String handleGroup= urlParts[urlParts.length-1];
+        String id = valueString.substring(valueString.lastIndexOf("/") + 1);
+        // String[] urlParts = PIDServiceURL.split("/");
+        // String handleGroup= urlParts[urlParts.length-1];
 
-        return handleGroup+"/"+id;
-     }
-
+        // return handleGroup+"/"+id;
+        return id;
+    }
 
     /**
      * EPIC PID API version 1, source ufal
+     *
      * @author Dieter Hofmann
      * @param method
      * @param command
@@ -224,8 +240,9 @@ public class PIDService {
      * @return
      * @throws IOException
      */
-	private static String sendPidCommandV1(HTTPMethod method, String command, String data,
-            String match_regex, boolean auth) throws IOException
+    private static String sendPidCommandV1(HTTPMethod method, String command, String data,
+            String match_regex, boolean auth)
+        throws IOException
     {
         URL url;
 
@@ -237,7 +254,8 @@ public class PIDService {
             url = new URL(PIDServiceURL + command + '?' + data);
             System.out.println(url.toString());
             input = url.openConnection().getInputStream();
-        } else {
+        }
+        else {
             url = new URL(PIDServiceURL + command);
             System.out.println(url.toString());
 
@@ -282,7 +300,8 @@ public class PIDService {
             else {
                 response += line + "\n";
             }
-        } while (response.length() < 5 * 1024); // reasonable threashold of 5KB
+        }
+        while (response.length() < 5 * 1024); // reasonable threashold of 5KB
 
         Matcher m = Pattern.compile(match_regex).matcher(response);
         if (m.find()) {
