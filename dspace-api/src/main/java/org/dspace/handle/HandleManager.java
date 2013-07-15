@@ -149,15 +149,19 @@ public class HandleManager
 
 
       //<UFAL>
-              String handleId = null;
-              try{
-                  handleId = DSpaceApi.handle_HandleManager_createId(log, handle.getIntColumn("handle_id"));
-                  // if the handle created successfully register the final handle
-                  DSpaceApi.handle_HandleManager_registerFinalHandleURL(log, handleId);
-              } catch(IOException e) {
-                  //DSpaceApi.getFunctionalityManager().setErrorMessage("PID Service is not working. Please contact the administrator.");
-                  throw new IllegalStateException("PID Service is not working. Please contact the administrator.");
-              }
+        String handleId = null;
+        try {
+            handleId = DSpaceApi.handle_HandleManager_createId(log,
+                    handle.getIntColumn("handle_id"));
+            // if the handle created successfully register the final handle
+            DSpaceApi.handle_HandleManager_registerFinalHandleURL(log, handleId);
+        }
+        catch (IOException e) {
+            // DSpaceApi.getFunctionalityManager().setErrorMessage("PID Service is not working. Please contact the administrator.");
+            throw new IllegalStateException(
+                    "PID Service is not working. Please contact the administrator: "
+                            + e.getMessage(), e);
+        }
       //</UFAL>
 
         handle.setColumn("handle", handleId);

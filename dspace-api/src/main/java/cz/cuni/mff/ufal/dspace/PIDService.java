@@ -36,6 +36,7 @@ import java.net.URLEncoder;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -49,35 +50,27 @@ import org.opensaml.xml.util.Base64;
 
 public class PIDService
 {
-    private static String PIDServiceURL;
-    private static String PIDServiceUSER;
-    private static String PIDServicePASS;
-    private static String PIDServiceVERSION;
-    private static String PIDServicePREFIX;
-
-    private static boolean initialized;
-
+    private static final String PROP_URL = "handle.service.url";
+    private static final String PROP_USER = "handle.service.user";
+    private static final String PROP_PASS = "handle.service.pass";
+    private static final String PROP_VER = "handle.service.version";
+    
     static class PIDServiceAuthenticator
         extends Authenticator
     {
         @Override
         public PasswordAuthentication getPasswordAuthentication()
         {
-            return (new PasswordAuthentication(PIDServiceUSER, PIDServicePASS.toCharArray()));
+            return (new PasswordAuthentication(
+                    ConfigurationManager.getProperty(PIDService.PROP_USER), ConfigurationManager
+                            .getProperty(PIDService.PROP_PASS).toCharArray()));
         }
     }
 
-    private static void initialize()
+    private static void selfcheck()
         throws IOException
     {
-        initialized = true;
-        PIDServiceURL = ConfigurationManager.getProperty("handle.service.url");
-        PIDServiceUSER = ConfigurationManager.getProperty("handle.service.user");
-        PIDServicePASS = ConfigurationManager.getProperty("handle.service.pass");
-        PIDServicePREFIX = ConfigurationManager.getProperty("handle.prefix");
-        PIDServiceVERSION = ConfigurationManager.getProperty("handle.service.version");
-
-        if (PIDServiceURL == null || PIDServiceURL.length() == 0) {
+        if (StringUtils.isBlank(ConfigurationManager.getProperty(PROP_URL))) {
             throw new IOException("PIDService URL not configured.");
            // serviceNotConfigured  = true;
         }
@@ -106,107 +99,105 @@ public class PIDService
     private static String sendPIDCommandV2(HTTPMethod method, String pid, String url, boolean auth)
         throws IOException
     {
-        {
-            HttpClient httpClient = new DefaultHttpClient();
-            try {
-                if (method == HTTPMethod.GET) {// GET
-                    // NOT TESTET
-                    /*
-                     * String pidParts[] = pid.split("/");
-                     *
-                     * String getUrl = null; if(pidParts.length>=1) { getUrl=
-                     * PIDServiceURL+pidParts[pidParts.length-1]; } else { getUrl=
-                     * PIDServiceURL+pid; }
-                     */
-                    String getUrl = PIDServiceURL + pid;
+        HttpClient httpClient = new DefaultHttpClient();
+        try {
+            if (method == HTTPMethod.GET) {// GET
+                // NOT TESTET
+                /*
+                 * String pidParts[] = pid.split("/");
+                 *
+                 * String getUrl = null; if(pidParts.length>=1) { getUrl=
+                 * PIDServiceURL+pidParts[pidParts.length-1]; } else { getUrl=
+                 * PIDServiceURL+pid; }
+                 */
+                String getUrl = ConfigurationManager.getProperty(PROP_URL) + pid;
 
-                    HttpGet request = new HttpGet(getUrl);
-                    request.addHeader(
-                            "Authorization",
-                            "Basic "
-                                    + Base64.encodeBytes((PIDServiceUSER + ":" + PIDServicePASS)
-                                            .getBytes()));
-                    request.addHeader("Accept", "application/json");
+                HttpGet request = new HttpGet(getUrl);
+                request.addHeader(
+                        "Authorization",
+                        "Basic " + Base64.encodeBytes((ConfigurationManager
+                                        .getProperty(PROP_USER) + ":" + ConfigurationManager
+                                        .getProperty(PROP_PASS)).getBytes()));
+                request.addHeader("Accept", "application/json");
 
-                    HttpResponse response = httpClient.execute(request);
+                HttpResponse response = httpClient.execute(request);
 
-                    // get JSON from response
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(response
-                            .getEntity().getContent(), "UTF-8"));
-                    StringBuilder builder = new StringBuilder();
-                    for (String line = null; (line = reader.readLine()) != null;) {
-                        builder.append(line).append("\n");
-                    }
-
-                    return builder.toString();
-                }
-                else if (method == HTTPMethod.POST) {// CREATE
-
-                    HttpPost request = new HttpPost(PIDServiceURL);
-                    request.addHeader(
-                            "Authorization",
-                            "Basic "
-                                    + Base64.encodeBytes((PIDServiceUSER + ":" + PIDServicePASS)
-                                            .getBytes()));
-                    String json = "[{\"type\":\"URL\",\"parsed_data\":\"" + url + "\"}]";
-
-                    StringEntity params = new StringEntity(json);
-                    request.addHeader("Content-Type", "application/json");
-                    request.addHeader("Accept", "application/json");
-
-                    request.setEntity(params);
-                    HttpResponse response = httpClient.execute(request);
-                    if (response.getStatusLine().getStatusCode() != 201) {
-                        return null;
-                    }
-
-                    return getIdFromResponse(response);
-
+                // get JSON from response
+                BufferedReader reader = new BufferedReader(new InputStreamReader(response
+                        .getEntity().getContent(), "UTF-8"));
+                StringBuilder builder = new StringBuilder();
+                for (String line = null; (line = reader.readLine()) != null;) {
+                    builder.append(line).append("\n");
                 }
 
-                else if (method == HTTPMethod.PUT) {// MODIFY
+                return builder.toString();
+            }
+            else if (method == HTTPMethod.POST) {// CREATE
 
-                    /*String pidParts[] = pid.split("/");
+                HttpPost request = new HttpPost(ConfigurationManager.getProperty(PROP_URL));
+                request.addHeader(
+                        "Authorization",
+                        "Basic " + Base64.encodeBytes((ConfigurationManager.getProperty(PROP_USER)
+                                        + ":" + ConfigurationManager.getProperty(PROP_PASS))
+                                        .getBytes()));
+                String json = "[{\"type\":\"URL\",\"parsed_data\":\"" + url + "\"}]";
 
-                    String putUrl = null;
-                    if (pidParts.length >= 1) {
-                        putUrl = PIDServiceURL + pidParts[pidParts.length - 1];
-                    }
-                    else {
-                        putUrl = PIDServiceURL + pid;
-                    }*/
-                    String putUrl = PIDServiceURL + pid;
+                StringEntity params = new StringEntity(json);
+                request.addHeader("Content-Type", "application/json");
+                request.addHeader("Accept", "application/json");
 
-
-                    HttpPut request = new HttpPut(putUrl);
-                    request.addHeader(
-                            "Authorization",
-                            "Basic "
-                                    + Base64.encodeBytes((PIDServiceUSER + ":" + PIDServicePASS)
-                                            .getBytes()));
-                    String json = "[{\"type\":\"URL\",\"parsed_data\":\"" + url + "\"}]";
-
-                    StringEntity params = new StringEntity(json);
-                    request.addHeader("Content-Type", "application/json");
-                    request.addHeader("Accept", "application/json");
-
-                    request.setEntity(params);
-                    HttpResponse response = httpClient.execute(request);
-
-                    if (response.getStatusLine().getStatusCode() != 204) {
-                        return null;
-                    }
-
-                    return url;
+                request.setEntity(params);
+                HttpResponse response = httpClient.execute(request);
+                if (response.getStatusLine().getStatusCode() != 201) {
+                    return null;
                 }
+
+                return getIdFromResponse(response);
             }
-            catch (Exception ex) {
-                ex.printStackTrace();
-                // handle exception here
+            else if (method == HTTPMethod.PUT) {// MODIFY
+
+                /*String pidParts[] = pid.split("/");
+
+                String putUrl = null;
+                if (pidParts.length >= 1) {
+                    putUrl = PIDServiceURL + pidParts[pidParts.length - 1];
+                }
+                else {
+                    putUrl = PIDServiceURL + pid;
+                }*/
+                String putUrl = ConfigurationManager.getProperty(PROP_URL) + pid;
+
+
+                HttpPut request = new HttpPut(putUrl);
+                request.addHeader(
+                        "Authorization",
+                        "Basic "  + Base64.encodeBytes((ConfigurationManager.getProperty(PROP_USER)
+                                        + ":" + ConfigurationManager.getProperty(PROP_PASS))
+                                        .getBytes()));
+                String json = "[{\"type\":\"URL\",\"parsed_data\":\"" + url + "\"}]";
+
+                StringEntity params = new StringEntity(json);
+                request.addHeader("Content-Type", "application/json");
+                request.addHeader("Accept", "application/json");
+
+                request.setEntity(params);
+                HttpResponse response = httpClient.execute(request);
+
+                if (response.getStatusLine().getStatusCode() != 204) {
+                    return null;
+                }
+
+                return url;
             }
-            finally {
-                httpClient.getConnectionManager().shutdown();
-            }
+        }
+        catch (IOException e) {
+            throw e;
+        }
+        catch (Exception ex) {
+            throw new IOException(ex);
+        }
+        finally {
+            httpClient.getConnectionManager().shutdown();
         }
         return null;
     }
@@ -251,12 +242,12 @@ public class PIDService
         }
         InputStream input;
         if (method == HTTPMethod.GET) {
-            url = new URL(PIDServiceURL + command + '?' + data);
+            url = new URL(ConfigurationManager.getProperty(PROP_URL) + command + '?' + data);
             System.out.println(url.toString());
             input = url.openConnection().getInputStream();
         }
         else {
-            url = new URL(PIDServiceURL + command);
+            url = new URL(ConfigurationManager.getProperty(PROP_URL) + command);
             System.out.println(url.toString());
 
             // <OLD>
@@ -314,34 +305,27 @@ public class PIDService
     public static String resolvePID(String PID)
         throws IOException
     {
-        if (!initialized) {
-            initialize();
-        }
+        selfcheck();
 
-        if ("2".equals(PIDServiceVERSION)) {
+        if ("2".equals(ConfigurationManager.getProperty(PROP_VER))) {
             return sendPIDCommandV2(HTTPMethod.GET, PID, null, true);
         }
         else {
-
             return sendPidCommandV1(HTTPMethod.GET, "read/view", "showmenu=no" + "&pid="
                     + URLEncoder.encode(PID, "UTF-8"), "<tr><td>Location</td><td>([^<]+)</td>",
                     false);
-
         }
     }
 
     public static String modifyPID(String PID, String URL)
         throws IOException
     {
-        if (!initialized) {
-            initialize();
-        }
+        selfcheck();
 
-        if ("2".equals(PIDServiceVERSION)) {
+        if ("2".equals(ConfigurationManager.getProperty(PROP_VER))) {
             return sendPIDCommandV2(HTTPMethod.PUT, PID, URL, true);
         }
         else {
-
             return sendPidCommandV1(
                     HTTPMethod.POST,
                     "write/modify",
@@ -354,15 +338,12 @@ public class PIDService
     public static String createPID(String URL)
         throws IOException
     {
-        if (!initialized) {
-            initialize();
-        }
+        selfcheck();
 
-        if ("2".equals(PIDServiceVERSION)) {
+        if ("2".equals(ConfigurationManager.getProperty(PROP_VER))) {
             return sendPIDCommandV2(HTTPMethod.POST, null, URL, true);
         }
         else {
-
             return sendPidCommandV1(HTTPMethod.POST, "write/create",
                     "url=" + URLEncoder.encode(URL, "UTF-8"), "<h2><a href=\"[^\"]*\">([^<]+)</a>",
                     true);
