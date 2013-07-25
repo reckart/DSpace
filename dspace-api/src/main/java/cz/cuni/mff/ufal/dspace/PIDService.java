@@ -46,6 +46,7 @@ import org.apache.http.client.methods.HttpPut;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.dspace.core.ConfigurationManager;
+import org.dspace.identifier.HandleIdentifierProvider;
 import org.opensaml.xml.util.Base64;
 
 public class PIDService
@@ -102,14 +103,6 @@ public class PIDService
         HttpClient httpClient = new DefaultHttpClient();
         try {
             if (method == HTTPMethod.GET) {// GET
-                // NOT TESTET
-                /*
-                 * String pidParts[] = pid.split("/");
-                 *
-                 * String getUrl = null; if(pidParts.length>=1) { getUrl=
-                 * PIDServiceURL+pidParts[pidParts.length-1]; } else { getUrl=
-                 * PIDServiceURL+pid; }
-                 */
                 String getUrl = ConfigurationManager.getProperty(PROP_URL) + pid;
 
                 HttpGet request = new HttpGet(getUrl);
@@ -133,8 +126,11 @@ public class PIDService
                 return builder.toString();
             }
             else if (method == HTTPMethod.POST) {// CREATE
-
-                HttpPost request = new HttpPost(ConfigurationManager.getProperty(PROP_URL));
+                String serviceUrl = ConfigurationManager.getProperty(PROP_URL);
+                if (!serviceUrl.endsWith("/")) {
+                    serviceUrl += "/";
+                }
+                HttpPost request = new HttpPost(serviceUrl + HandleIdentifierProvider.getPrefix()+"/");
                 request.addHeader(
                         "Authorization",
                         "Basic " + Base64.encodeBytes((ConfigurationManager.getProperty(PROP_USER)
@@ -216,7 +212,7 @@ public class PIDService
         // String handleGroup= urlParts[urlParts.length-1];
 
         // return handleGroup+"/"+id;
-        return id;
+        return HandleIdentifierProvider.getPrefix()+"/"+id;
     }
 
     /**
