@@ -167,7 +167,7 @@
                 </xsl:if>
               </xsl:attribute>
             </meta>
-            <!-- Add stylsheets -->
+            <!-- Add stylesheets -->
             <xsl:for-each select="/dri:document/dri:meta/dri:pageMeta/dri:metadata[@element='stylesheet']">
                 <link rel="stylesheet" type="text/css">
                     <xsl:attribute name="media">
@@ -263,7 +263,7 @@
 
                                 FnArray.prototype.execute = function()
                                 {
-                                    for( var i=0; i <xsl:text disable-output-escaping="yes">&lt;</xsl:text> this.funcs.length; i++ )
+                                    for( var i=0; i &lt; this.funcs.length; i++ )
                                     {
                                         this.funcs[i]();
                                     }
