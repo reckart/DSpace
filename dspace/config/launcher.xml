@@ -199,6 +199,14 @@
         </step>
     </command>
 
+      <command>
+        <name>doi-organiser</name>
+        <description>Run the DOI organiser</description>
+        <step>
+            <class>org.dspace.identifier.doi.DOIOrganiser</class>
+        </step>
+    </command>
+
     <command>
         <name>packager</name>
         <description>Execute a packager</description>
@@ -212,6 +220,14 @@
         <description>Load entries into a registry</description>
         <step>
             <class>org.dspace.administer.RegistryLoader</class>
+        </step>
+    </command>
+
+    <command>
+        <name>read</name>
+        <description>Execute a stream of 'dspace' commands from a file or pipe</description>
+        <step>
+            <class>org.dspace.app.launcher.CommandRunner</class>
         </step>
     </command>
 
@@ -372,6 +388,14 @@
     </command>
 
     <command>
+        <name>user</name>
+        <description>Manipulate a normal user account</description>
+        <step>
+            <class>org.dspace.eperson.EPerson</class>
+        </step>
+    </command>
+
+    <command>
         <name>migrate-embargo</name>
         <description>Embargo manager tool used to migrate old version of Embargo to the new one included in dspace3</description>
         <step>
@@ -384,6 +408,14 @@
         <description>OAI script manager</description>
         <step>
             <class>org.dspace.xoai.app.XOAI</class>
+        </step>
+    </command>
+
+    <command>
+        <name>version</name>
+        <description>Display the version of DSpace and other troubleshooting information</description>
+        <step>
+            <class>org.dspace.app.util.Version</class>
         </step>
     </command>
 

@@ -15,7 +15,7 @@
     <parent>
         <groupId>org.dspace</groupId>
         <artifactId>dspace-parent</artifactId>
-        <version>3.3-SNAPSHOT</version>
+        <version>4.0-rc1</version>
         <relativePath>..</relativePath>
     </parent>
 
@@ -29,36 +29,6 @@
             <!-- Filter using the properties file defined by dspace-parent POM -->
             <filter>${filters.file}</filter>
         </filters>
-         <resources>
-            <!-- Enumerate filtered files explicitly to avoid issues with other config tech. -->
-            <resource>
-                <directory>${basedir}</directory>
-                <filtering>true</filtering>
-                <includes>
-                    <include>config/default.context.xml</include>
-                    <include>config/dspace.cfg</include>
-                    <include>config/log4j-handle-plugin.properties</include>
-                    <include>config/log4j.properties</include>
-                    <include>config/modules/curate.cfg</include>
-                    <include>config/modules/oai.cfg</include>
-                    <include>config/modules/solr-statistics.cfg</include>
-                </includes>
-            </resource>
-            <!-- Declare a mutually exclusive resource set for non-filtered files. -->
-            <resource>
-                <directory>${basedir}</directory>
-                <filtering>false</filtering>
-                <excludes>
-                    <exclude>config/default.context.xml</exclude>
-                    <exclude>config/dspace.cfg</exclude>
-                    <exclude>config/log4j-handle-plugin.properties</exclude>
-                    <exclude>config/log4j.properties</exclude>
-                    <exclude>config/modules/curate.cfg</exclude>
-                    <exclude>config/modules/oai.cfg</exclude>
-                    <exclude>config/modules/solr-statistics.cfg</exclude>
-                </excludes>
-            </resource>
-        </resources>
     
         <plugins>
             <!--  Default project assembly. Calls 'assembly.xml', which
@@ -84,79 +54,6 @@
                 </executions>
             </plugin>
         </plugins>
-        <pluginManagement>
-        	<plugins>
-        		<!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
-        		<plugin>
-        			<groupId>org.eclipse.m2e</groupId>
-        			<artifactId>lifecycle-mapping</artifactId>
-        			<version>1.0.0</version>
-        			<configuration>
-        				<lifecycleMappingMetadata>
-        					<pluginExecutions>
-        						<pluginExecution>
-        							<pluginExecutionFilter>
-        								<groupId>
-        									org.apache.maven.plugins
-        								</groupId>
-        								<artifactId>
-        									maven-dependency-plugin
-        								</artifactId>
-        								<versionRange>
-        									[2.3,)
-        								</versionRange>
-        								<goals>
-        									<goal>unpack</goal>
-        								</goals>
-        							</pluginExecutionFilter>
-        							<action>
-        								<ignore></ignore>
-        							</action>
-        						</pluginExecution>
-        						<pluginExecution>
-        							<pluginExecutionFilter>
-        								<groupId>
-        									org.codehaus.gmaven
-        								</groupId>
-        								<artifactId>
-        									gmaven-plugin
-        								</artifactId>
-        								<versionRange>
-        									[1.4,)
-        								</versionRange>
-        								<goals>
-        									<goal>execute</goal>
-        								</goals>
-        							</pluginExecutionFilter>
-        							<action>
-        								<ignore></ignore>
-        							</action>
-        						</pluginExecution>
-        						<pluginExecution>
-        							<pluginExecutionFilter>
-        								<groupId>
-        									edu.iu.ul.maven.plugins
-        								</groupId>
-        								<artifactId>
-        									fileweaver
-        								</artifactId>
-        								<versionRange>
-        									[1.0,)
-        								</versionRange>
-        								<goals>
-        									<goal>weave</goal>
-        								</goals>
-        							</pluginExecutionFilter>
-        							<action>
-        								<ignore></ignore>
-        							</action>
-        						</pluginExecution>
-        					</pluginExecutions>
-        				</lifecycleMappingMetadata>
-        			</configuration>
-        		</plugin>
-        	</plugins>
-        </pluginManagement>
     </build>
 
     <profiles>
